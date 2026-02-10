@@ -744,9 +744,9 @@ function updateConnectionStatus(status, mode, msg) {
 
   // Feed label text
   if (feedLabel) {
-    if (msg === 'Market closed') feedLabel.textContent = 'Market Closed';
+    if (msg === 'Market closed') feedLabel.textContent = 'MARKET CLOSED';
     else if (status === 'connected') feedLabel.textContent = 'Live Feed';
-    else if (status === 'delayed') feedLabel.textContent = 'Delayed Feed (15min)';
+    else if (status === 'delayed') feedLabel.textContent = 'DELAYED FEED (15MIN)';
     else if (status === 'disconnected' || status === 'error') feedLabel.textContent = 'Disconnected';
     else feedLabel.textContent = 'Demo Mode';
   }
