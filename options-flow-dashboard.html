@@ -224,7 +224,7 @@ tbody tr:hover{background:#0f0f0f}
         <div class="pnl-body">
           <div class="feed-banner">
             <div class="feed-dot" id="feedDot"></div>
-            <span>Live Feed</span>
+            <span id="feedLabel">Live Feed</span>
             <span>|</span>
             <span>Streaming <span class="feed-ct" id="feedAge">0s</span> ago</span>
           </div>
@@ -727,10 +727,11 @@ function updateExpirationDropdowns(exps) {
 }
 
 // ==================== CONNECTION STATUS ====================
-function updateConnectionStatus(status, mode) {
+function updateConnectionStatus(status, mode, msg) {
   const el = document.getElementById('connStatus');
   const rtEl = document.getElementById('rtBadge');
   const feedDot = document.getElementById('feedDot');
+  const feedLabel = document.getElementById('feedLabel');
   el.className = 'hdr-status';
 
   // Feed dot color: green=live, orange=delayed, red=disconnected, gray=demo
@@ -739,6 +740,15 @@ function updateConnectionStatus(status, mode) {
     else if (status === 'delayed') feedDot.style.background = 'var(--orange)';
     else if (status === 'disconnected' || status === 'error') feedDot.style.background = 'var(--red)';
     else feedDot.style.background = 'var(--dim)';
+  }
+
+  // Feed label text
+  if (feedLabel) {
+    if (msg === 'Market closed') feedLabel.textContent = 'Market Closed';
+    else if (status === 'connected') feedLabel.textContent = 'Live Feed';
+    else if (status === 'delayed') feedLabel.textContent = 'Delayed Feed (15min)';
+    else if (status === 'disconnected' || status === 'error') feedLabel.textContent = 'Disconnected';
+    else feedLabel.textContent = 'Demo Mode';
   }
 
   if (status === 'connected' || status === 'connecting') {
@@ -866,9 +876,13 @@ function startLiveMode(mode, config) {
       });
     }
     if (msg.expirations) {
-      const exps = Object.values(msg.expirations).filter(e => e);
+      // Expirations can be a list (new) or object (legacy)
+      const exps = Array.isArray(msg.expirations)
+        ? msg.expirations.filter(e => e)
+        : Object.values(msg.expirations).filter(e => e);
       if (exps.length > 0) updateExpirationDropdowns([...new Set(exps)]);
     }
+    if (msg.status) updateConnectionStatus(msg.status, mode, msg.msg);
     renderAll();
   });
 
@@ -917,7 +931,7 @@ function startLiveMode(mode, config) {
 
   provider.on('status', (msg) => {
     const st = msg.status || 'connected';
-    updateConnectionStatus(st, mode);
+    updateConnectionStatus(st, mode, msg.msg);
 
     if (st === 'error') {
       console.error('Connection error:', msg.msg);

@@ -239,11 +239,27 @@ def detect_delayed(quote_time_str) -> bool:
     return False
 
 
+def is_market_open() -> bool:
+    """Check if US equity markets are currently open (9:30-16:00 ET, Mon-Fri)."""
+    try:
+        from datetime import timezone
+        now_utc = datetime.now(timezone.utc)
+        et_offset = timedelta(hours=-5)
+        now_et = now_utc + et_offset
+        if now_et.weekday() > 4:  # Sat/Sun
+            return False
+        market_open = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
+        market_close = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
+        return market_open <= now_et <= market_close
+    except Exception:
+        return True  # Assume open on error
+
+
 # ─── Shared State ────────────────────────────────────────────────────────────
 
 clients: set = set()                     # connected browser WebSocket sessions
 latest_quotes: Dict[str, dict] = {}      # ticker -> {last, bid, ask, vol, hi, lo, chg, pctChg}
-latest_chains: Dict[str, dict] = {}      # ticker -> {expiration, data: {c:[...], p:[...]}}
+latest_chains: Dict[str, Dict[str, dict]] = {}  # ticker -> {exp_date: {c:[...], p:[...]}}
 latest_flow: Dict[str, dict] = {}        # ticker -> {cv, pv, pc, unusual:[...]}
 stream_ref = None
 is_delayed = False
@@ -357,20 +373,29 @@ def on_equity_tick(data, instrument, fields):
             prev[k] = v
     latest_quotes[ticker] = prev
 
-    # ── Delayed detection (periodic, not every tick) ──
+    # ── Delayed / market-closed detection (periodic, not every tick) ──
     _delay_check_count += 1
     if _delay_check_count % _delay_check_interval == 1:
         quotim = _raw("QUOTIM")
-        if quotim:
+        market_open = is_market_open()
+        if quotim or not market_open:
             was_delayed = is_delayed
-            is_delayed = detect_delayed(quotim)
-            if is_delayed != was_delayed:
-                status = "delayed" if is_delayed else "connected"
+            is_delayed = detect_delayed(quotim) if quotim else is_delayed
+            effectively_delayed = is_delayed or not market_open
+            was_effectively = was_delayed or False  # simplified
+            if effectively_delayed != was_effectively or (not market_open and _delay_check_count <= 2):
+                status = "delayed" if effectively_delayed else "connected"
+                if not market_open:
+                    msg = "Market closed"
+                elif is_delayed:
+                    msg = "15-min delayed feed"
+                else:
+                    msg = "Real-time feed"
                 logger.info("Feed status changed: %s (QUOTIM=%s)", status.upper(), quotim)
                 schedule_broadcast({
                     "type": "status",
                     "status": status,
-                    "msg": "15-min delayed feed" if is_delayed else "Real-time feed",
+                    "msg": msg,
                 })
 
     schedule_broadcast({
@@ -469,28 +494,34 @@ def fetch_chain_snapshot(ticker: str, expiration: str) -> Optional[dict]:
 
 
 async def poll_chains_loop():
-    """Periodically fetch options chains for all tickers."""
-    expirations = get_next_expirations(2)
-    exp = expirations[0] if expirations else "2026-02-14"
+    """Periodically fetch options chains for all tickers across multiple expirations."""
+    expirations = get_next_expirations(4)
 
     while True:
         try:
-            # Refresh expiration dates periodically
-            expirations = get_next_expirations(2)
-            exp = expirations[0] if expirations else exp
+            expirations = get_next_expirations(4)
 
-            for ticker in RIC_TO_TICKER.values():
-                chain = await asyncio.to_thread(fetch_chain_snapshot, ticker, exp)
-                if chain:
-                    latest_chains[ticker] = {"expiration": exp, "data": chain}
-                    schedule_broadcast({
-                        "type": "chain_update",
-                        "ticker": ticker,
-                        "expiration": exp,
-                        "data": chain,
-                    })
-                    logger.debug("Chain updated: %s (%d calls, %d puts)",
-                                 ticker, len(chain["c"]), len(chain["p"]))
+            for exp in expirations:
+                for ticker in RIC_TO_TICKER.values():
+                    chain = await asyncio.to_thread(fetch_chain_snapshot, ticker, exp)
+                    if chain:
+                        if ticker not in latest_chains:
+                            latest_chains[ticker] = {}
+                        latest_chains[ticker][exp] = chain
+                        schedule_broadcast({
+                            "type": "chain_update",
+                            "ticker": ticker,
+                            "expiration": exp,
+                            "data": chain,
+                        })
+                        logger.debug("Chain updated: %s %s (%d calls, %d puts)",
+                                     ticker, exp, len(chain["c"]), len(chain["p"]))
+
+            # Broadcast available expirations list
+            schedule_broadcast({
+                "type": "expirations_update",
+                "expirations": expirations,
+            })
 
         except Exception as e:
             logger.error("Chain poll error: %s", e)
@@ -501,8 +532,11 @@ async def poll_chains_loop():
 # ─── Flow / Unusual Activity Polling ─────────────────────────────────────────
 
 def compute_flow(ticker: str) -> Optional[dict]:
-    """Compute flow stats from latest chain data."""
-    chain = latest_chains.get(ticker, {}).get("data")
+    """Compute flow stats from latest chain data (uses nearest expiration)."""
+    chain_exps = latest_chains.get(ticker, {})
+    if not chain_exps:
+        return None
+    chain = next(iter(chain_exps.values()))  # Use first (nearest) expiration
     if not chain:
         return None
 
@@ -572,13 +606,25 @@ async def ws_handler(websocket):
 
     # Send initial snapshot
     try:
+        # Build expirations list and pick nearest chain per ticker for snapshot
+        all_exps = sorted({exp for exps in latest_chains.values() for exp in exps.keys()})
+        nearest_chains = {}
+        for tk, exps in latest_chains.items():
+            if exps:
+                nearest_chains[tk] = next(iter(exps.values()))
+
+        # Determine initial status
+        init_status = "delayed" if (is_delayed or not is_market_open()) else "connected"
+        init_msg = "Market closed" if not is_market_open() else ("15-min delayed feed" if is_delayed else "Real-time feed")
+
         snapshot = {
             "type": "snapshot",
             "quotes": latest_quotes,
-            "chains": {tk: ch.get("data", {}) for tk, ch in latest_chains.items()},
-            "expirations": {tk: ch.get("expiration", "") for tk, ch in latest_chains.items()},
+            "chains": nearest_chains,
+            "expirations": all_exps,
             "flow": latest_flow,
-            "status": "delayed" if is_delayed else "connected",
+            "status": init_status,
+            "msg": init_msg,
         }
         await websocket.send(json.dumps(snapshot, default=str))
     except Exception:
