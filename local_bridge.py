@@ -495,11 +495,11 @@ def fetch_chain_snapshot(ticker: str, expiration: str) -> Optional[dict]:
 
 async def poll_chains_loop():
     """Periodically fetch options chains for all tickers across multiple expirations."""
-    expirations = get_next_expirations(4)
+    expirations = get_next_expirations(8)
 
     while True:
         try:
-            expirations = get_next_expirations(4)
+            expirations = get_next_expirations(8)
 
             for exp in expirations:
                 for ticker in RIC_TO_TICKER.values():
@@ -606,12 +606,8 @@ async def ws_handler(websocket):
 
     # Send initial snapshot
     try:
-        # Build expirations list and pick nearest chain per ticker for snapshot
+        # Build expirations list and send all chains keyed by {ticker: {exp: data}}
         all_exps = sorted({exp for exps in latest_chains.values() for exp in exps.keys()})
-        nearest_chains = {}
-        for tk, exps in latest_chains.items():
-            if exps:
-                nearest_chains[tk] = next(iter(exps.values()))
 
         # Determine initial status
         init_status = "delayed" if (is_delayed or not is_market_open()) else "connected"
@@ -620,7 +616,7 @@ async def ws_handler(websocket):
         snapshot = {
             "type": "snapshot",
             "quotes": latest_quotes,
-            "chains": nearest_chains,
+            "chains": dict(latest_chains),
             "expirations": all_exps,
             "flow": latest_flow,
             "status": init_status,

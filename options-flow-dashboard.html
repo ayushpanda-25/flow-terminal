@@ -228,6 +228,7 @@ tbody tr:hover{background:#0f0f0f}
             <span>|</span>
             <span>Streaming <span class="feed-ct" id="feedAge">0s</span> ago</span>
           </div>
+          <div id="marketClosedBanner" style="display:none;background:#1a1200;border:1px solid #fb8b1e;color:#fb8b1e;padding:4px 10px;font-size:11px;text-align:center;border-radius:4px;margin-bottom:6px;">MARKET CLOSED — Showing last available data</div>
           <div class="filters">
             <button class="fbtn on" data-f="all">ALL</button>
             <button class="fbtn" data-f="calls">CALLS</button>
@@ -578,7 +579,12 @@ function renderFlow() {
 
 function renderChain() {
   const tk = selectedChainTk;
-  const data = liveChains[tk];
+  const tkChains = liveChains[tk];
+  if (!tkChains) return;
+  // Pick selected expiration, or fall back to first available
+  const data = (selectedChainExp && tkChains[selectedChainExp])
+    ? tkChains[selectedChainExp]
+    : Object.values(tkChains)[0];
   if (!data) return;
   const price = (lp[tk] || {}).last || 0;
   const tbody = document.getElementById('chainBody');
@@ -641,7 +647,11 @@ function renderDonuts() {
 
 function renderStrikeChart() {
   const tk = document.getElementById('strikeTk').value;
-  const d = liveChains[tk];
+  const tkChains = liveChains[tk];
+  if (!tkChains) return;
+  const d = (selectedChainExp && tkChains[selectedChainExp])
+    ? tkChains[selectedChainExp]
+    : Object.values(tkChains)[0];
   if (!d) return;
   const strikes = d.c.map(c => c.s);
   const cv = d.c.map(c => c.v || 0);
@@ -751,6 +761,10 @@ function updateConnectionStatus(status, mode, msg) {
     else feedLabel.textContent = 'Demo Mode';
   }
 
+  // Market closed banner
+  const mcBanner = document.getElementById('marketClosedBanner');
+  if (mcBanner) mcBanner.style.display = (msg === 'Market closed') ? '' : 'none';
+
   if (status === 'connected' || status === 'connecting') {
     if (mode === 'local') {
       el.textContent = 'LOCAL STREAM';
@@ -773,7 +787,7 @@ function updateConnectionStatus(status, mode, msg) {
       el.textContent = 'SERVER';
       el.classList.add('status-server');
     }
-    rtEl.textContent = 'DELAYED 15min';
+    rtEl.textContent = 'DELAYED 15MIN';
     rtEl.className = 'hdr-rt rt-delayed';
     rtEl.style.display = '';
     isRealtime = false;
@@ -920,7 +934,8 @@ function startLiveMode(mode, config) {
   });
 
   provider.on('chain', (ticker, expiration, data) => {
-    liveChains[ticker] = data;
+    if (!liveChains[ticker]) liveChains[ticker] = {};
+    liveChains[ticker][expiration] = data;
     if (ticker === selectedChainTk) renderChain();
     if (ticker === document.getElementById('strikeTk').value) renderStrikeChart();
   });
@@ -958,7 +973,11 @@ function startDemoMode() {
     lp[t] = { ...DEMO_QUOTES[t] };
     liveFlow[t] = { ...DEMO_FLOW[t] };
     liveUnusual[t] = (DEMO_UNUSUAL[t] || []).map(a => ({ ...a }));
-    if (DEMO_CHAINS[t]) liveChains[t] = { c: DEMO_CHAINS[t].c.map(c => ({...c})), p: DEMO_CHAINS[t].p.map(p => ({...p})) };
+    if (DEMO_CHAINS[t]) {
+      const demoExp = DEMO_EXPIRATIONS[0] || 'demo';
+      liveChains[t] = {};
+      liveChains[t][demoExp] = { c: DEMO_CHAINS[t].c.map(c => ({...c})), p: DEMO_CHAINS[t].p.map(p => ({...p})) };
+    }
   });
 
   updateExpirationDropdowns(DEMO_EXPIRATIONS);
