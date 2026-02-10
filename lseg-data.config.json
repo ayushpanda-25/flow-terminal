@@ -1,0 +1,17 @@
+{
+    "sessions": {
+        "default": "desktop.workspace",
+        "desktop": {
+            "workspace": {
+                "app-key": "YOUR_APP_KEY_HERE"
+            }
+        },
+        "platform": {
+            "rdp": {
+                "app-key": "YOUR_APP_KEY_HERE",
+                "username": "YOUR_MACHINE_ID",
+                "password": "YOUR_PASSWORD"
+            }
+        }
+    }
+}
