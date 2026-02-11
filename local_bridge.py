@@ -23,6 +23,7 @@ import sys
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List, Any
 
+import pandas as pd
 import websockets
 
 # ─── Monkey-patch refinitiv-data httpx proxy issue ────────────────────────────
@@ -483,6 +484,49 @@ def on_equity_tick(data, instrument, fields):
     })
 
 
+def seed_quotes_from_history():
+    """Seed latest_quotes with yesterday's close via rd.get_history().
+
+    This ensures the dashboard shows prices and chains can center
+    even before the streaming feed delivers its first tick (common
+    pre-market on delayed feeds).
+    """
+    import refinitiv.data as rd
+
+    if not EQUITY_RICS:
+        return
+    try:
+        df = rd.get_history(
+            EQUITY_RICS,
+            fields=["TRDPRC_1", "HIGH_1", "LOW_1", "ACVOL_UNS"],
+            count=1,
+        )
+        if df is None or df.empty:
+            logger.warning("History seed returned no data")
+            return
+        for ric in EQUITY_RICS:
+            ticker = RIC_TO_TICKER.get(ric)
+            if not ticker:
+                continue
+            try:
+                row = df[ric].iloc[-1] if isinstance(df.columns, pd.MultiIndex) else df.iloc[-1]
+                last = _safe_float(row.get("TRDPRC_1") if hasattr(row, 'get') else row["TRDPRC_1"])
+                hi = _safe_float(row.get("HIGH_1") if hasattr(row, 'get') else row["HIGH_1"])
+                lo = _safe_float(row.get("LOW_1") if hasattr(row, 'get') else row["LOW_1"])
+                vol = _safe_float(row.get("ACVOL_UNS") if hasattr(row, 'get') else row["ACVOL_UNS"])
+                if last and last > 0:
+                    latest_quotes[ticker] = {
+                        "last": last, "hi": hi, "lo": lo,
+                        "vol": vol, "chg": 0.0, "pctChg": 0.0,
+                    }
+                    logger.info("  Seeded %s = %.2f (prev close)", ticker, last)
+            except Exception as e:
+                logger.debug("History seed parse error for %s: %s", ric, e)
+        logger.info("Seeded %d/%d tickers from history", len(latest_quotes), len(EQUITY_RICS))
+    except Exception as e:
+        logger.warning("History seed failed: %s", e)
+
+
 def start_equity_stream():
     """Open streaming subscription for the 6 equity underlyings."""
     global stream_ref
@@ -784,6 +828,10 @@ async def main():
         logger.error("No RICs could be resolved. Check LSEG Workspace connection.")
         close_lseg_session()
         sys.exit(1)
+
+    # 1c. Seed latest_quotes with yesterday's close so chains & dashboard
+    #     work immediately even before the stream delivers its first tick.
+    seed_quotes_from_history()
 
     # 2. Start equity stream
     if not start_equity_stream():
