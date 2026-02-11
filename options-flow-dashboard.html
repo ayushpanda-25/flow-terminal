@@ -81,7 +81,7 @@ tbody tr:hover{background:#0f0f0f}
 .exp-tag{color:var(--dim);font-size:9px}
 
 /* Sentiment cards grid */
-.sent-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:4px}
+.sent-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:4px}
 .sent-card{background:var(--panel);border:1px solid var(--border);padding:6px 8px}
 .sent-sym{color:var(--yellow);font-weight:700;font-size:12px}
 .sent-price{color:var(--white);font-weight:700;font-size:14px;margin:2px 0}
@@ -235,8 +235,8 @@ tbody tr:hover{background:#0f0f0f}
             <button class="fbtn" data-f="puts">PUTS</button>
             <select class="fsel" id="tkFilter">
               <option value="">ALL TICKERS</option>
-              <option>SPY</option><option>AAPL</option><option>NVDA</option>
-              <option>TSLA</option><option>QQQ</option><option>AMZN</option>
+              <option>SPY</option><option>QQQ</option><option>AAPL</option><option>MSFT</option><option>NVDA</option>
+              <option>TSLA</option><option>AMZN</option><option>GOOG</option><option>META</option>
             </select>
             <select class="fsel" id="expFilter">
               <option value="">ALL EXPIRATIONS</option>
@@ -275,8 +275,8 @@ tbody tr:hover{background:#0f0f0f}
           <span class="pnl-title" id="chainTitle">SPY Options Chain</span>
           <div class="chain-sel">
             <select class="fsel" id="chainTk">
-              <option>SPY</option><option>AAPL</option><option>NVDA</option>
-              <option>TSLA</option><option>QQQ</option><option>AMZN</option>
+              <option>SPY</option><option>QQQ</option><option>AAPL</option><option>MSFT</option><option>NVDA</option>
+              <option>TSLA</option><option>AMZN</option><option>GOOG</option><option>META</option>
             </select>
             <select class="fsel" id="chainExp"></select>
           </div>
@@ -298,8 +298,8 @@ tbody tr:hover{background:#0f0f0f}
         <div class="pnl-hdr">
           <span class="pnl-title">Volume by Strike</span>
           <select class="fsel" id="strikeTk" style="margin-left:auto">
-            <option>SPY</option><option>AAPL</option><option>NVDA</option>
-            <option>TSLA</option><option>QQQ</option><option>AMZN</option>
+            <option>SPY</option><option>QQQ</option><option>AAPL</option><option>MSFT</option><option>NVDA</option>
+            <option>TSLA</option><option>AMZN</option><option>GOOG</option><option>META</option>
           </select>
         </div>
         <div class="pnl-body"><div class="chart-box" style="height:220px"><canvas id="strikeChart"></canvas></div></div>
@@ -320,7 +320,7 @@ tbody tr:hover{background:#0f0f0f}
 <script>
 // ==================== CONFIG ====================
 const DEMO_MODE = new URLSearchParams(window.location.search).has('demo');
-const TICKERS = ['SPY','AAPL','NVDA','TSLA','QQQ','AMZN'];
+const TICKERS = ['SPY','QQQ','AAPL','MSFT','NVDA','TSLA','AMZN','GOOG','META'];
 
 // ==================== DEMO DATA (Feb 10 2026) ====================
 const DEMO_QUOTES={
@@ -329,13 +329,18 @@ const DEMO_QUOTES={
   NVDA:{last:189.33,chg:-0.45,hi:192.48,lo:188.13,vol:7191513},
   TSLA:{last:424.28,chg:6.96,hi:427.24,lo:417.00,vol:1484805},
   QQQ:{last:613.39,chg:-0.93,hi:617.02,lo:612.42,vol:6104761},
-  AMZN:{last:208.42,chg:-0.24,hi:212.61,lo:206.46,vol:3058751}
+  AMZN:{last:208.42,chg:-0.24,hi:212.61,lo:206.46,vol:3058751},
+  GOOG:{last:185.43,chg:1.12,hi:186.50,lo:183.90,vol:2145000},
+  META:{last:698.50,chg:3.21,hi:701.20,lo:694.80,vol:1876000},
+  MSFT:{last:412.75,chg:-1.05,hi:415.30,lo:411.50,vol:2534000}
 };
 
 const DEMO_FLOW={
   SPY:{cv:114416,pv:106354,pc:0.930},AAPL:{cv:31837,pv:8446,pc:0.265},
   NVDA:{cv:57905,pv:39398,pc:0.680},TSLA:{cv:97398,pv:58314,pc:0.599},
-  QQQ:{cv:40773,pv:56093,pc:1.376},AMZN:{cv:40614,pv:37941,pc:0.934}
+  QQQ:{cv:40773,pv:56093,pc:1.376},AMZN:{cv:40614,pv:37941,pc:0.934},
+  GOOG:{cv:18500,pv:14200,pc:0.768},META:{cv:22300,pv:19800,pc:0.888},
+  MSFT:{cv:25400,pv:21600,pc:0.850}
 };
 
 const DEMO_UNUSUAL={
@@ -386,6 +391,18 @@ const DEMO_UNUSUAL={
     {s:210,t:'C',v:16648,l:2.16,d:0.4238},{s:210,t:'P',v:7171,l:3.60,d:-0.5792},
     {s:205,t:'P',v:7044,l:1.48,d:-0.3079},{s:215,t:'P',v:2902,l:7.27,d:-0.8207},
     {s:205,t:'C',v:2803,l:5.01,d:0.6887}
+  ],
+  GOOG:[
+    {s:185,t:'C',v:8200,l:2.80,d:0.4800},{s:190,t:'C',v:5400,l:0.95,d:0.2100},
+    {s:180,t:'P',v:4100,l:1.20,d:-0.2500},{s:185,t:'P',v:3800,l:3.10,d:-0.5200}
+  ],
+  META:[
+    {s:700,t:'C',v:12400,l:5.50,d:0.4600},{s:710,t:'C',v:7800,l:2.10,d:0.2300},
+    {s:695,t:'P',v:6200,l:3.80,d:-0.3900},{s:690,t:'P',v:4500,l:2.40,d:-0.2800}
+  ],
+  MSFT:[
+    {s:415,t:'C',v:9800,l:3.20,d:0.4500},{s:420,t:'C',v:6100,l:1.40,d:0.2400},
+    {s:410,t:'P',v:5600,l:2.90,d:-0.3600},{s:405,t:'P',v:3200,l:1.50,d:-0.2200}
   ]
 };
 
@@ -395,7 +412,10 @@ const DEMO_CHAINS={
   AAPL:{c:[{s:265,b:9.30,a:9.40,l:9.35,v:2684,d:0.8931,iv:null,oi:null},{s:267,b:7.45,a:7.55,l:7.50,v:890,d:0.8200,iv:null,oi:null},{s:269,b:5.80,a:5.90,l:5.85,v:1150,d:0.7500,iv:null,oi:null},{s:270,b:5.15,a:5.25,l:5.19,v:3334,d:0.7271,iv:null,oi:null},{s:271,b:4.50,a:4.60,l:4.55,v:1820,d:0.6700,iv:null,oi:null},{s:273,b:3.30,a:3.40,l:3.35,v:2100,d:0.5800,iv:null,oi:null},{s:274,b:2.70,a:2.80,l:2.75,v:1560,d:0.5100,iv:null,oi:null},{s:275,b:2.08,a:2.11,l:2.04,v:16425,d:0.4443,iv:null,oi:null},{s:276,b:1.55,a:1.58,l:1.56,v:3400,d:0.3700,iv:null,oi:null},{s:278,b:0.95,a:0.98,l:0.96,v:2200,d:0.2600,iv:null,oi:null},{s:280,b:0.53,a:0.55,l:0.52,v:9394,d:0.1670,iv:null,oi:null}],p:[{s:265,b:0.38,a:0.40,l:0.39,v:1693,d:-0.1040,iv:null,oi:null},{s:267,b:0.58,a:0.60,l:0.59,v:920,d:-0.1700,iv:null,oi:null},{s:269,b:0.85,a:0.88,l:0.86,v:1050,d:-0.2400,iv:null,oi:null},{s:270,b:1.10,a:1.12,l:1.14,v:3798,d:-0.2693,iv:null,oi:null},{s:271,b:1.40,a:1.43,l:1.41,v:1600,d:-0.3200,iv:null,oi:null},{s:273,b:2.10,a:2.15,l:2.12,v:1900,d:-0.4100,iv:null,oi:null},{s:274,b:2.55,a:2.60,l:2.57,v:1450,d:-0.4800,iv:null,oi:null},{s:275,b:2.95,a:2.98,l:3.00,v:2773,d:-0.5580,iv:null,oi:null},{s:276,b:3.40,a:3.45,l:3.42,v:2800,d:-0.6200,iv:null,oi:null},{s:278,b:4.70,a:4.80,l:4.75,v:1100,d:-0.7300,iv:null,oi:null},{s:280,b:6.40,a:6.70,l:6.70,v:182,d:-0.8430,iv:null,oi:null}]},
   NVDA:{c:[{s:180,b:10.00,a:10.10,l:10.00,v:4708,d:0.8598,iv:null,oi:null},{s:182,b:8.30,a:8.40,l:8.35,v:2100,d:0.8000,iv:null,oi:null},{s:184,b:6.70,a:6.80,l:6.75,v:2800,d:0.7400,iv:null,oi:null},{s:185,b:5.80,a:5.85,l:5.83,v:4199,d:0.7145,iv:null,oi:null},{s:186,b:5.00,a:5.10,l:5.05,v:3100,d:0.6500,iv:null,oi:null},{s:188,b:3.60,a:3.70,l:3.65,v:4500,d:0.5600,iv:null,oi:null},{s:189,b:3.00,a:3.10,l:3.05,v:5200,d:0.5100,iv:null,oi:null},{s:190,b:2.60,a:2.62,l:2.62,v:26603,d:0.4701,iv:null,oi:null},{s:191,b:2.10,a:2.15,l:2.12,v:8400,d:0.4000,iv:null,oi:null},{s:193,b:1.30,a:1.35,l:1.32,v:6200,d:0.2900,iv:null,oi:null},{s:195,b:0.83,a:0.84,l:0.84,v:22394,d:0.2117,iv:null,oi:null}],p:[{s:180,b:0.58,a:0.60,l:0.59,v:11851,d:-0.1342,iv:null,oi:null},{s:182,b:0.85,a:0.88,l:0.86,v:4200,d:-0.1900,iv:null,oi:null},{s:184,b:1.15,a:1.18,l:1.16,v:5600,d:-0.2500,iv:null,oi:null},{s:185,b:1.39,a:1.40,l:1.37,v:13534,d:-0.2831,iv:null,oi:null},{s:186,b:1.65,a:1.68,l:1.66,v:6800,d:-0.3400,iv:null,oi:null},{s:188,b:2.25,a:2.30,l:2.27,v:5100,d:-0.4300,iv:null,oi:null},{s:189,b:2.65,a:2.70,l:2.67,v:4800,d:-0.4800,iv:null,oi:null},{s:190,b:3.15,a:3.20,l:3.15,v:11939,d:-0.5317,iv:null,oi:null},{s:191,b:3.70,a:3.75,l:3.72,v:7200,d:-0.5900,iv:null,oi:null},{s:193,b:4.80,a:4.90,l:4.85,v:3800,d:-0.7000,iv:null,oi:null},{s:195,b:6.40,a:6.45,l:6.43,v:2074,d:-0.7954,iv:null,oi:null}]},
   TSLA:{c:[{s:415,b:12.90,a:13.00,l:12.95,v:6602,d:0.7081,iv:null,oi:null},{s:417,b:11.20,a:11.30,l:11.25,v:3200,d:0.6600,iv:null,oi:null},{s:419,b:9.80,a:9.90,l:9.85,v:4100,d:0.6200,iv:null,oi:null},{s:420,b:9.55,a:9.70,l:9.65,v:25456,d:0.6072,iv:null,oi:null},{s:421,b:8.70,a:8.80,l:8.75,v:5800,d:0.5600,iv:null,oi:null},{s:423,b:7.30,a:7.40,l:7.35,v:6200,d:0.5200,iv:null,oi:null},{s:424,b:6.60,a:6.70,l:6.65,v:7500,d:0.4800,iv:null,oi:null},{s:425,b:6.80,a:6.90,l:6.82,v:41366,d:0.4959,iv:null,oi:null},{s:426,b:5.50,a:5.60,l:5.55,v:8200,d:0.4200,iv:null,oi:null},{s:428,b:4.30,a:4.40,l:4.35,v:5900,d:0.3500,iv:null,oi:null},{s:430,b:4.60,a:4.70,l:4.62,v:23853,d:0.3830,iv:null,oi:null}],p:[{s:415,b:3.45,a:3.50,l:3.48,v:5784,d:-0.2907,iv:null,oi:null},{s:417,b:4.00,a:4.10,l:4.05,v:3600,d:-0.3300,iv:null,oi:null},{s:419,b:4.60,a:4.70,l:4.65,v:4200,d:-0.3700,iv:null,oi:null},{s:420,b:4.95,a:5.00,l:5.00,v:19293,d:-0.3920,iv:null,oi:null},{s:421,b:5.40,a:5.50,l:5.45,v:5400,d:-0.4300,iv:null,oi:null},{s:423,b:6.30,a:6.40,l:6.35,v:5800,d:-0.4700,iv:null,oi:null},{s:424,b:6.80,a:6.90,l:6.85,v:6100,d:-0.5000,iv:null,oi:null},{s:425,b:7.15,a:7.25,l:7.16,v:12779,d:-0.5051,iv:null,oi:null},{s:426,b:7.80,a:7.90,l:7.85,v:7800,d:-0.5500,iv:null,oi:null},{s:428,b:9.10,a:9.20,l:9.15,v:5200,d:-0.6200,iv:null,oi:null},{s:430,b:9.90,a:10.05,l:10.05,v:20422,d:-0.6179,iv:null,oi:null}]},
-  AMZN:{c:[{s:200,b:9.20,a:9.30,l:9.25,v:1800,d:0.8800,iv:null,oi:null},{s:202,b:7.60,a:7.70,l:7.65,v:1200,d:0.8100,iv:null,oi:null},{s:204,b:5.80,a:5.90,l:5.85,v:1600,d:0.7300,iv:null,oi:null},{s:205,b:5.00,a:5.10,l:5.01,v:2803,d:0.6759,iv:null,oi:null},{s:206,b:4.30,a:4.40,l:4.35,v:2100,d:0.6100,iv:null,oi:null},{s:208,b:3.10,a:3.20,l:3.15,v:3200,d:0.5200,iv:null,oi:null},{s:209,b:2.60,a:2.70,l:2.65,v:4100,d:0.4600,iv:null,oi:null},{s:210,b:2.16,a:2.19,l:2.16,v:16648,d:0.4121,iv:null,oi:null},{s:211,b:1.70,a:1.75,l:1.72,v:5200,d:0.3500,iv:null,oi:null},{s:213,b:1.00,a:1.05,l:1.02,v:3800,d:0.2400,iv:null,oi:null},{s:215,b:0.72,a:0.73,l:0.74,v:20574,d:0.1824,iv:null,oi:null}],p:[{s:200,b:0.50,a:0.55,l:0.53,v:20824,d:-0.1314,iv:null,oi:null},{s:202,b:0.80,a:0.85,l:0.82,v:2400,d:-0.1800,iv:null,oi:null},{s:204,b:1.15,a:1.20,l:1.17,v:3200,d:-0.2600,iv:null,oi:null},{s:205,b:1.46,a:1.49,l:1.48,v:7044,d:-0.3199,iv:null,oi:null},{s:206,b:1.80,a:1.85,l:1.82,v:3500,d:-0.3800,iv:null,oi:null},{s:208,b:2.60,a:2.70,l:2.65,v:4100,d:-0.4700,iv:null,oi:null},{s:209,b:3.10,a:3.20,l:3.15,v:3800,d:-0.5300,iv:null,oi:null},{s:210,b:3.55,a:3.65,l:3.60,v:7171,d:-0.5915,iv:null,oi:null},{s:211,b:4.10,a:4.20,l:4.15,v:4800,d:-0.6400,iv:null,oi:null},{s:213,b:5.50,a:5.60,l:5.55,v:2200,d:-0.7500,iv:null,oi:null},{s:215,b:7.10,a:7.25,l:7.27,v:2902,d:-0.8279,iv:null,oi:null}]}
+  AMZN:{c:[{s:200,b:9.20,a:9.30,l:9.25,v:1800,d:0.8800,iv:null,oi:null},{s:202,b:7.60,a:7.70,l:7.65,v:1200,d:0.8100,iv:null,oi:null},{s:204,b:5.80,a:5.90,l:5.85,v:1600,d:0.7300,iv:null,oi:null},{s:205,b:5.00,a:5.10,l:5.01,v:2803,d:0.6759,iv:null,oi:null},{s:206,b:4.30,a:4.40,l:4.35,v:2100,d:0.6100,iv:null,oi:null},{s:208,b:3.10,a:3.20,l:3.15,v:3200,d:0.5200,iv:null,oi:null},{s:209,b:2.60,a:2.70,l:2.65,v:4100,d:0.4600,iv:null,oi:null},{s:210,b:2.16,a:2.19,l:2.16,v:16648,d:0.4121,iv:null,oi:null},{s:211,b:1.70,a:1.75,l:1.72,v:5200,d:0.3500,iv:null,oi:null},{s:213,b:1.00,a:1.05,l:1.02,v:3800,d:0.2400,iv:null,oi:null},{s:215,b:0.72,a:0.73,l:0.74,v:20574,d:0.1824,iv:null,oi:null}],p:[{s:200,b:0.50,a:0.55,l:0.53,v:20824,d:-0.1314,iv:null,oi:null},{s:202,b:0.80,a:0.85,l:0.82,v:2400,d:-0.1800,iv:null,oi:null},{s:204,b:1.15,a:1.20,l:1.17,v:3200,d:-0.2600,iv:null,oi:null},{s:205,b:1.46,a:1.49,l:1.48,v:7044,d:-0.3199,iv:null,oi:null},{s:206,b:1.80,a:1.85,l:1.82,v:3500,d:-0.3800,iv:null,oi:null},{s:208,b:2.60,a:2.70,l:2.65,v:4100,d:-0.4700,iv:null,oi:null},{s:209,b:3.10,a:3.20,l:3.15,v:3800,d:-0.5300,iv:null,oi:null},{s:210,b:3.55,a:3.65,l:3.60,v:7171,d:-0.5915,iv:null,oi:null},{s:211,b:4.10,a:4.20,l:4.15,v:4800,d:-0.6400,iv:null,oi:null},{s:213,b:5.50,a:5.60,l:5.55,v:2200,d:-0.7500,iv:null,oi:null},{s:215,b:7.10,a:7.25,l:7.27,v:2902,d:-0.8279,iv:null,oi:null}]},
+  GOOG:{c:[{s:175,b:11.20,a:11.30,l:11.25,v:1500,d:0.8700,iv:null,oi:null},{s:177,b:9.40,a:9.50,l:9.45,v:1100,d:0.8100,iv:null,oi:null},{s:180,b:6.80,a:6.90,l:6.85,v:2400,d:0.7000,iv:null,oi:null},{s:182,b:5.20,a:5.30,l:5.25,v:3200,d:0.6100,iv:null,oi:null},{s:185,b:3.30,a:3.40,l:3.35,v:8200,d:0.4800,iv:null,oi:null},{s:187,b:2.10,a:2.20,l:2.15,v:4500,d:0.3600,iv:null,oi:null},{s:190,b:1.05,a:1.10,l:1.08,v:5400,d:0.2100,iv:null,oi:null}],p:[{s:175,b:0.45,a:0.50,l:0.48,v:1200,d:-0.1200,iv:null,oi:null},{s:177,b:0.70,a:0.75,l:0.72,v:1800,d:-0.1800,iv:null,oi:null},{s:180,b:1.20,a:1.25,l:1.22,v:4100,d:-0.2900,iv:null,oi:null},{s:182,b:1.75,a:1.80,l:1.77,v:3500,d:-0.3800,iv:null,oi:null},{s:185,b:3.10,a:3.15,l:3.12,v:3800,d:-0.5200,iv:null,oi:null},{s:187,b:4.30,a:4.40,l:4.35,v:2900,d:-0.6300,iv:null,oi:null},{s:190,b:5.80,a:5.90,l:5.85,v:2100,d:-0.7800,iv:null,oi:null}]},
+  META:{c:[{s:685,b:17.50,a:17.60,l:17.55,v:1800,d:0.8500,iv:null,oi:null},{s:690,b:13.80,a:13.90,l:13.85,v:2400,d:0.7600,iv:null,oi:null},{s:695,b:10.20,a:10.30,l:10.25,v:4800,d:0.6400,iv:null,oi:null},{s:700,b:7.10,a:7.20,l:7.15,v:12400,d:0.5100,iv:null,oi:null},{s:705,b:4.50,a:4.60,l:4.55,v:8200,d:0.3600,iv:null,oi:null},{s:710,b:2.50,a:2.60,l:2.55,v:7800,d:0.2300,iv:null,oi:null},{s:715,b:1.20,a:1.30,l:1.25,v:3200,d:0.1200,iv:null,oi:null}],p:[{s:685,b:2.80,a:2.90,l:2.85,v:1500,d:-0.1400,iv:null,oi:null},{s:690,b:3.60,a:3.70,l:3.65,v:2800,d:-0.2300,iv:null,oi:null},{s:695,b:5.00,a:5.10,l:5.05,v:6200,d:-0.3500,iv:null,oi:null},{s:700,b:7.30,a:7.40,l:7.35,v:5400,d:-0.4800,iv:null,oi:null},{s:705,b:10.10,a:10.20,l:10.15,v:3600,d:-0.6300,iv:null,oi:null},{s:710,b:13.20,a:13.30,l:13.25,v:2200,d:-0.7600,iv:null,oi:null},{s:715,b:16.80,a:16.90,l:16.85,v:1400,d:-0.8700,iv:null,oi:null}]},
+  MSFT:{c:[{s:400,b:14.50,a:14.60,l:14.55,v:2100,d:0.8600,iv:null,oi:null},{s:405,b:10.80,a:10.90,l:10.85,v:3400,d:0.7400,iv:null,oi:null},{s:410,b:7.30,a:7.40,l:7.35,v:5600,d:0.6000,iv:null,oi:null},{s:415,b:4.20,a:4.30,l:4.25,v:9800,d:0.4500,iv:null,oi:null},{s:420,b:2.10,a:2.20,l:2.15,v:6100,d:0.2800,iv:null,oi:null},{s:425,b:0.90,a:0.95,l:0.92,v:3800,d:0.1500,iv:null,oi:null}],p:[{s:400,b:1.30,a:1.40,l:1.35,v:1400,d:-0.1300,iv:null,oi:null},{s:405,b:2.40,a:2.50,l:2.45,v:3200,d:-0.2500,iv:null,oi:null},{s:410,b:4.10,a:4.20,l:4.15,v:5600,d:-0.3900,iv:null,oi:null},{s:415,b:6.50,a:6.60,l:6.55,v:4200,d:-0.5400,iv:null,oi:null},{s:420,b:9.60,a:9.70,l:9.65,v:2800,d:-0.7100,iv:null,oi:null},{s:425,b:13.30,a:13.40,l:13.35,v:1600,d:-0.8400,iv:null,oi:null}]}
 };
 
 const DEMO_EXPIRATIONS = ['Feb 13 2026'];
@@ -452,7 +472,7 @@ class DataProvider {
         switch (msg.type) {
           case 'snapshot':
             this.emit('snapshot', msg);
-            this.emit('status', { status: msg.status || 'connected', msg: 'Receiving data' });
+            this.emit('status', { status: msg.status || 'connected', msg: msg.msg || 'Receiving data' });
             break;
           case 'quote_update':
             this.emit('quote', msg.ticker, msg.data);
@@ -606,7 +626,7 @@ function renderChain() {
 }
 
 // ATM threshold per ticker for chain highlighting
-const CHAIN_CFG_JS = { SPY: 1, QQQ: 1, AAPL: 2.5, NVDA: 2.5, TSLA: 2.5, AMZN: 2.5 };
+const CHAIN_CFG_JS = { SPY: 1, QQQ: 1, AAPL: 2.5, MSFT: 2.5, NVDA: 2.5, TSLA: 2.5, AMZN: 2.5, GOOG: 2.5, META: 2.5 };
 
 // ==================== CHARTS ====================
 Chart.defaults.color = '#666';

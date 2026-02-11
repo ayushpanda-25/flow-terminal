@@ -67,11 +67,14 @@ WS_PORT = int(os.environ.get("FLOW_WS_PORT", "8765"))
 # We'll resolve these at startup by testing which suffixes are entitled.
 TICKER_RIC_CANDIDATES = {
     "SPY":  ["SPY.A", "SPY.P", "SPY"],
+    "QQQ":  ["QQQ.O", "QQQ.OQ", "QQQ.P"],
     "AAPL": ["AAPL.O", "AAPL.OQ", "AAPL.P"],
+    "MSFT": ["MSFT.O", "MSFT.OQ", "MSFT.P"],
     "NVDA": ["NVDA.O", "NVDA.OQ", "NVDA.P"],
     "TSLA": ["TSLA.O", "TSLA.OQ", "TSLA.P"],
-    "QQQ":  ["QQQ.O", "QQQ.OQ", "QQQ.P"],
     "AMZN": ["AMZN.O", "AMZN.OQ", "AMZN.P"],
+    "GOOG": ["GOOG.O", "GOOG.OQ", "GOOG.P"],
+    "META": ["META.O", "META.OQ", "META.P"],
 }
 
 # Resolved at startup by resolve_rics()
@@ -93,8 +96,10 @@ OPTION_FIELDS = [
 # SPY/QQQ get 15 strikes at $1 step, others get 11 at $5 step
 CHAIN_CFG = {
     "SPY": (1.0, 15), "QQQ": (1.0, 15),
-    "AAPL": (5.0, 11), "NVDA": (5.0, 11),
-    "TSLA": (5.0, 11), "AMZN": (5.0, 11),
+    "AAPL": (5.0, 11), "MSFT": (5.0, 11),
+    "NVDA": (5.0, 11), "TSLA": (5.0, 11),
+    "AMZN": (5.0, 11), "GOOG": (5.0, 11),
+    "META": (5.0, 11),
 }
 
 POLL_CHAINS_SEC = 30   # seconds between chain snapshots
@@ -147,18 +152,17 @@ def build_option_ric(underlying: str, expiration: str, option_type: str, strike:
     return f"{underlying.upper()}{mc}{day}{yr}{sn}.U"
 
 
-def get_next_expirations(n: int = 3) -> List[str]:
-    """Return the next N weekly option expiration dates as YYYY-MM-DD strings.
+def get_next_expirations(n: int = 8) -> List[str]:
+    """Return the next N option expiration dates as YYYY-MM-DD strings.
 
-    SPY weekly options typically expire Mon/Wed/Fri. We return the next N
-    business days that are likely expirations (Mon, Wed, Fri).
+    SPY/QQQ have daily (0DTE) expirations every business day.
+    We return every weekday (Mon-Fri) going forward.
     """
     today = datetime.now().date()
     candidates = []
     d = today
-    # Walk forward up to 30 days, collecting Mon(0), Wed(2), Fri(4)
-    for _ in range(30):
-        if d.weekday() in (0, 2, 4):  # Mon, Wed, Fri
+    for _ in range(45):
+        if d.weekday() < 5:  # Mon-Fri
             if d > today or (d == today and datetime.now().hour < 16):
                 candidates.append(d.strftime("%Y-%m-%d"))
                 if len(candidates) >= n:
@@ -455,6 +459,7 @@ def fetch_chain_snapshot(ticker: str, expiration: str) -> Optional[dict]:
     put_rics = [build_option_ric(underlying, expiration, "P", s) for s in strikes]
 
     all_rics = call_rics + put_rics
+    logger.info("Fetching chain: %s exp=%s (%d RICs)", ticker, expiration, len(all_rics))
     try:
         df = rd.get_data(all_rics, OPTION_FIELDS)
     except Exception as e:
@@ -495,15 +500,26 @@ def fetch_chain_snapshot(ticker: str, expiration: str) -> Optional[dict]:
 
 async def poll_chains_loop():
     """Periodically fetch options chains for all tickers across multiple expirations."""
-    expirations = get_next_expirations(8)
+    CHAIN_EXPS = 3  # Fetch chains for nearest N expirations (keeps API calls manageable)
 
     while True:
         try:
-            expirations = get_next_expirations(8)
+            all_expirations = get_next_expirations(8)
+            chain_expirations = all_expirations[:CHAIN_EXPS]
+            tickers = list(RIC_TO_TICKER.values())
+            logger.info("Chain poll: %d expirations × %d tickers = %d fetches",
+                        len(chain_expirations), len(tickers), len(chain_expirations) * len(tickers))
 
-            for exp in expirations:
-                for ticker in RIC_TO_TICKER.values():
-                    chain = await asyncio.to_thread(fetch_chain_snapshot, ticker, exp)
+            for exp in chain_expirations:
+                for ticker in tickers:
+                    try:
+                        chain = await asyncio.wait_for(
+                            asyncio.to_thread(fetch_chain_snapshot, ticker, exp),
+                            timeout=15
+                        )
+                    except asyncio.TimeoutError:
+                        logger.warning("Chain fetch timed out: %s %s", ticker, exp)
+                        chain = None
                     if chain:
                         if ticker not in latest_chains:
                             latest_chains[ticker] = {}
@@ -514,17 +530,17 @@ async def poll_chains_loop():
                             "expiration": exp,
                             "data": chain,
                         })
-                        logger.debug("Chain updated: %s %s (%d calls, %d puts)",
-                                     ticker, exp, len(chain["c"]), len(chain["p"]))
+                logger.info("Chains fetched for %s (%d tickers)", exp, len(tickers))
 
-            # Broadcast available expirations list
+            # Broadcast ALL expirations (dropdown shows more than what we fetch chains for)
             schedule_broadcast({
                 "type": "expirations_update",
-                "expirations": expirations,
+                "expirations": all_expirations,
             })
+            logger.info("Chain poll complete — %d expirations broadcast", len(all_expirations))
 
         except Exception as e:
-            logger.error("Chain poll error: %s", e)
+            logger.error("Chain poll error: %s", e, exc_info=True)
 
         await asyncio.sleep(POLL_CHAINS_SEC)
 
