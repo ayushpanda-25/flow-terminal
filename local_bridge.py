@@ -94,13 +94,13 @@ OPTION_FIELDS = [
 ]
 
 # Per-ticker chain config: (strike_step, num_strikes)
-# SPY/QQQ get 15 strikes at $1 step, others get 11 at $5 step
+# SPY/QQQ get 20 strikes at $1 step, others get 15 strikes
 CHAIN_CFG = {
-    "SPY": (1.0, 15), "QQQ": (1.0, 15),
-    "AAPL": (5.0, 11), "MSFT": (5.0, 11),
-    "NVDA": (5.0, 11), "TSLA": (5.0, 11),
-    "AMZN": (5.0, 11), "GOOG": (5.0, 11),
-    "META": (5.0, 11),
+    "SPY": (1.0, 20), "QQQ": (1.0, 20),
+    "AAPL": (2.5, 15), "MSFT": (2.5, 15),
+    "NVDA": (2.5, 15), "TSLA": (5.0, 15),
+    "AMZN": (5.0, 15), "GOOG": (5.0, 15),
+    "META": (5.0, 15),
 }
 
 POLL_CHAINS_SEC = 30   # seconds between chain snapshots
@@ -623,8 +623,8 @@ async def ws_handler(websocket):
 
     # Send initial snapshot
     try:
-        # Build expirations list and send all chains keyed by {ticker: {exp: data}}
-        all_exps = sorted({exp for exps in latest_chains.values() for exp in exps.keys()})
+        # Build expirations list — send full set (not just those with chain data)
+        all_exps = get_next_expirations(8)
 
         # Determine initial status
         init_status = "delayed" if (is_delayed or not is_market_open()) else "connected"
