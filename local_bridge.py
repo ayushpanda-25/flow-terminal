@@ -94,13 +94,14 @@ OPTION_FIELDS = [
 ]
 
 # Per-ticker chain config: (strike_step, num_strikes)
-# SPY/QQQ get 20 strikes at $1 step, others get 15 strikes
+# num_strikes passed to generate_strike_range; half on each side of ATM
+# SPY/QQQ: 30 → ±15 strikes → 31 rows; others: 21 → ±10 → 21 rows
 CHAIN_CFG = {
-    "SPY": (1.0, 20), "QQQ": (1.0, 20),
-    "AAPL": (2.5, 15), "MSFT": (2.5, 15),
-    "NVDA": (2.5, 15), "TSLA": (5.0, 15),
-    "AMZN": (5.0, 15), "GOOG": (5.0, 15),
-    "META": (5.0, 15),
+    "SPY": (1.0, 30), "QQQ": (1.0, 30),
+    "AAPL": (2.5, 21), "MSFT": (2.5, 21),
+    "NVDA": (2.5, 21), "TSLA": (5.0, 21),
+    "AMZN": (5.0, 21), "GOOG": (5.0, 21),
+    "META": (5.0, 21),
 }
 
 POLL_CHAINS_SEC = 30   # seconds between chain snapshots
