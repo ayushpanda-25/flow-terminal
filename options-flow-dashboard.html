@@ -139,7 +139,9 @@ tbody tr:hover{background:#0f0f0f}
 .conn-btn:hover{opacity:0.9}
 .conn-btn:disabled{opacity:0.5;cursor:not-allowed}
 .conn-disclaimer{color:#444;font-size:9px;text-align:center;margin-top:16px;line-height:1.6}
-.conn-error{color:var(--red);font-size:10px;margin-top:8px;display:none}
+.conn-error{color:var(--red);font-size:10px;margin-top:8px;display:none;line-height:1.7;text-align:left}
+.conn-error .checklist{color:var(--dim);margin:6px 0 0 0;padding:0 0 0 14px;list-style:none}
+.conn-error .checklist li::before{content:'› ';color:var(--amber)}
 .conn-demo{text-align:center;margin-top:12px}
 .conn-demo a{color:var(--dim);font-size:10px;text-decoration:underline;cursor:pointer}
 .conn-demo a:hover{color:var(--orange)}
@@ -601,6 +603,27 @@ function renderFlow() {
   document.getElementById('totalPrem').textContent = fmtP(totalPrem);
 }
 
+function showChainLoading() {
+  const tbody = document.getElementById('chainBody');
+  tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:var(--dim);padding:32px 0;font-size:11px;letter-spacing:2px">LOADING...</td></tr>';
+}
+
+// Update chain expiration dropdown to only show expirations with data for selected ticker
+function updateChainExpForTicker() {
+  const tk = selectedChainTk;
+  const chainExpEl = document.getElementById('chainExp');
+  const tkChains = liveChains[tk] || {};
+  const tkExps = Object.keys(tkChains).sort();
+  const prevExp = chainExpEl.value;
+  // Use per-ticker expirations if available, else fallback to global
+  const exps = tkExps.length > 0 ? tkExps : availableExpirations;
+  if (exps.length > 0) {
+    chainExpEl.innerHTML = exps.map(e => `<option value="${e}">${e}</option>`).join('');
+    if (prevExp && exps.includes(prevExp)) chainExpEl.value = prevExp;
+    else { chainExpEl.value = exps[0]; selectedChainExp = exps[0]; }
+  }
+}
+
 function renderChain() {
   const tk = selectedChainTk;
   const tkChains = liveChains[tk];
@@ -729,8 +752,32 @@ function setupFilters() {
   document.querySelectorAll('.fbtn').forEach(b => {
     b.addEventListener('click', () => { document.querySelectorAll('.fbtn').forEach(x => x.classList.remove('on')); b.classList.add('on'); filterFlow(); });
   });
-  document.getElementById('tkFilter').addEventListener('change', filterFlow);
+  document.getElementById('tkFilter').addEventListener('change', () => { updateExpFilterForTicker(); filterFlow(); });
   document.getElementById('expFilter').addEventListener('change', filterFlow);
+}
+
+// Update expiration filter dropdown based on selected ticker's available data
+function updateExpFilterForTicker() {
+  const tk = document.getElementById('tkFilter').value;
+  const expFilterEl = document.getElementById('expFilter');
+  const prevExp = expFilterEl.value;
+  let exps;
+  if (!tk) {
+    // ALL TICKERS — show all available expirations
+    exps = availableExpirations;
+  } else {
+    // Specific ticker — only show expirations that have chain data
+    const tkChains = liveChains[tk] || {};
+    exps = availableExpirations.filter(e => tkChains[e]);
+    // Fallback: if no chain data yet, also check flow data for expirations
+    if (exps.length === 0) {
+      const tkFlows = liveUnusual[tk] || [];
+      const flowExps = [...new Set(tkFlows.map(f => f.exp).filter(Boolean))];
+      exps = flowExps.length > 0 ? flowExps.sort() : availableExpirations;
+    }
+  }
+  expFilterEl.innerHTML = '<option value="">ALL EXPIRATIONS</option>' + exps.map(e => `<option value="${e}">${e}</option>`).join('');
+  if (prevExp && exps.includes(prevExp)) expFilterEl.value = prevExp;
 }
 
 function filterFlow() {
@@ -753,19 +800,20 @@ function filterFlow() {
 // ==================== EXPIRATION MANAGEMENT ====================
 function updateExpirationDropdowns(exps) {
   availableExpirations = exps || [];
-  const chainExpEl = document.getElementById('chainExp');
   const expFilterEl = document.getElementById('expFilter');
 
-  // Chain expiration dropdown
-  const prevChain = chainExpEl.value;
-  chainExpEl.innerHTML = exps.map(e => `<option value="${e}">${e}</option>`).join('');
-  if (prevChain && exps.includes(prevChain)) chainExpEl.value = prevChain;
-  else if (exps.length > 0) { chainExpEl.value = exps[0]; selectedChainExp = exps[0]; }
+  // Chain expiration dropdown — filtered per selected chain ticker
+  updateChainExpForTicker();
 
-  // Flow filter dropdown
-  const prevFilter = expFilterEl.value;
-  expFilterEl.innerHTML = '<option value="">ALL EXPIRATIONS</option>' + exps.map(e => `<option value="${e}">${e}</option>`).join('');
-  if (prevFilter) expFilterEl.value = prevFilter;
+  // Flow filter dropdown — filtered per selected flow ticker
+  const tk = document.getElementById('tkFilter').value;
+  if (tk) {
+    updateExpFilterForTicker();
+  } else {
+    const prevFilter = expFilterEl.value;
+    expFilterEl.innerHTML = '<option value="">ALL EXPIRATIONS</option>' + exps.map(e => `<option value="${e}">${e}</option>`).join('');
+    if (prevFilter) expFilterEl.value = prevFilter;
+  }
 
   // Sentiment label
   document.getElementById('sentExpLabel').textContent = exps.length > 1 ? `${exps.length} Expirations` : (exps[0] || 'All Expirations');
@@ -882,15 +930,6 @@ function setupConnectionOverlay() {
   // Local connect
   document.getElementById('localConnect').addEventListener('click', () => {
     errorEl.style.display = 'none';
-    // HTTPS pages can't connect to ws://localhost (Safari blocks mixed content)
-    if (window.location.protocol === 'https:') {
-      errorEl.innerHTML = 'Live mode requires the local bridge.<br>' +
-        'Open <a href="http://localhost:8766/options-flow-dashboard.html" ' +
-        'style="color:var(--accent);text-decoration:underline" target="_blank">' +
-        'localhost:8766</a> instead (bridge must be running).';
-      errorEl.style.display = 'block';
-      return;
-    }
     overlay.style.display = 'none';
     connectionMode = 'local';
     startLiveMode('local', {});
@@ -999,9 +1038,22 @@ function startLiveMode(mode, config) {
 
     if (st === 'error') {
       console.error('Connection error:', msg.msg);
-      // Show error on overlay
+      // Show error on overlay with localhost fallback link
       const errorEl = document.getElementById('connError');
-      errorEl.textContent = msg.msg || 'Connection failed';
+      const checklist = '<ul class="checklist">' +
+        '<li>LSEG Workspace is open and logged in</li>' +
+        '<li>Bridge is running: <span style="color:var(--text)">python3 local_bridge.py</span></li>' +
+        '<li>Terminal shows "Bridge ready!" with no errors</li>' +
+        '<li>App Key is correct (from LSEG AppKey Generator)</li>' +
+        '</ul>';
+      if (window.location.protocol === 'https:') {
+        errorEl.innerHTML = '<b style="color:var(--red)">Connection failed</b> — browser may block localhost from HTTPS.<br>' +
+          'Try <a href="http://localhost:8766/options-flow-dashboard.html" ' +
+          'style="color:var(--accent);text-decoration:underline" target="_blank">' +
+          'localhost:8766</a> instead, or check:' + checklist;
+      } else {
+        errorEl.innerHTML = '<b style="color:var(--red)">Connection failed</b> — check the following:' + checklist;
+      }
       errorEl.style.display = 'block';
       document.getElementById('connOverlay').style.display = 'flex';
     }
@@ -1158,14 +1210,15 @@ function init() {
   document.getElementById('flowDistFilter').addEventListener('change', renderDonuts);
   document.getElementById('chainTk').addEventListener('change', function() {
     selectedChainTk = this.value;
-    renderChain();
-    renderStrikeChart();
+    // Also update chain expiration dropdown for this ticker's available expirations
+    updateChainExpForTicker();
+    showChainLoading();
+    setTimeout(() => { renderChain(); renderStrikeChart(); }, 60);
   });
   document.getElementById('chainExp').addEventListener('change', function() {
     selectedChainExp = this.value;
-    // When live, request new expiration chain data
-    // For now, re-render with available data
-    renderChain();
+    showChainLoading();
+    setTimeout(() => { renderChain(); }, 60);
   });
 
   // Clock

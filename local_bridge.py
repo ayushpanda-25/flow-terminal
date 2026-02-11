@@ -534,12 +534,12 @@ async def poll_chains_loop():
                         })
                 logger.info("Chains fetched for %s (%d tickers)", exp, len(tickers))
 
-            # Broadcast ALL expirations (dropdown shows more than what we fetch chains for)
+            # Broadcast only the expirations we fetched chains for (not extras with no data)
             schedule_broadcast({
                 "type": "expirations_update",
-                "expirations": all_expirations,
+                "expirations": chain_expirations,
             })
-            logger.info("Chain poll complete — %d expirations broadcast", len(all_expirations))
+            logger.info("Chain poll complete — %d expirations broadcast", len(chain_expirations))
 
         except Exception as e:
             logger.error("Chain poll error: %s", e, exc_info=True)
@@ -629,8 +629,8 @@ async def ws_handler(websocket):
 
     # Send initial snapshot
     try:
-        # Build expirations list — send full set (not just those with chain data)
-        all_exps = get_next_expirations(8)
+        # Build expirations list — only send expirations we actually fetch chains for
+        all_exps = get_next_expirations(5)
 
         # Determine initial status
         init_status = "delayed" if (is_delayed or not is_market_open()) else "connected"
