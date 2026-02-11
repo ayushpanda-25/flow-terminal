@@ -44,6 +44,7 @@ body{font-family:'JetBrains Mono',monospace;background:#000;color:#c8c8c8;font-s
 .pnl{background:var(--panel);border:1px solid var(--border);overflow:hidden}
 .pnl-hdr{background:#111;border-bottom:1px solid var(--border);padding:3px 8px;display:flex;justify-content:space-between;align-items:center}
 .pnl-title{color:var(--orange);font-weight:700;font-size:11px;letter-spacing:0.5px;text-transform:uppercase}
+.pnl-ts{color:var(--dim);font-size:9px;margin-left:auto;padding-left:8px;white-space:nowrap}
 .pnl-sub{color:var(--dim);font-size:10px}
 .pnl-body{padding:4px 6px}
 
@@ -252,11 +253,13 @@ tbody tr:hover{background:#0f0f0f}
     </div>
     <div class="col">
       <div class="pnl" style="margin-bottom:4px">
-        <div class="pnl-hdr"><span class="pnl-title">Put/Call Ratio</span></div>
+        <div class="pnl-hdr"><span class="pnl-title">Put/Call Ratio</span><span class="pnl-ts" id="pcTs"></span></div>
         <div class="pnl-body"><div class="chart-box"><canvas id="pcChart"></canvas></div></div>
       </div>
       <div class="pnl">
-        <div class="pnl-hdr"><span class="pnl-title">Flow Distribution</span></div>
+        <div class="pnl-hdr"><span class="pnl-title">Flow Distribution</span><span class="pnl-ts" id="flowDistTs"></span>
+          <select class="fsel" id="flowDistFilter" style="margin-left:6px"><option value="all">All</option><option value="etfs">ETFs</option><option value="mag7">Mag 7</option></select>
+        </div>
         <div class="pnl-body">
           <div class="row">
             <div class="col"><div class="chart-box" style="height:160px"><canvas id="volDonut"></canvas></div></div>
@@ -296,7 +299,7 @@ tbody tr:hover{background:#0f0f0f}
     <div class="col">
       <div class="pnl" style="margin-bottom:4px">
         <div class="pnl-hdr">
-          <span class="pnl-title">Volume by Strike</span>
+          <span class="pnl-title">Volume by Strike</span><span class="pnl-ts" id="strikeTs"></span>
           <select class="fsel" id="strikeTk" style="margin-left:auto">
             <option>SPY</option><option>QQQ</option><option>AAPL</option><option>MSFT</option><option>NVDA</option>
             <option>TSLA</option><option>AMZN</option><option>GOOG</option><option>META</option>
@@ -305,7 +308,7 @@ tbody tr:hover{background:#0f0f0f}
         <div class="pnl-body"><div class="chart-box" style="height:220px"><canvas id="strikeChart"></canvas></div></div>
       </div>
       <div class="pnl">
-        <div class="pnl-hdr"><span class="pnl-title">Net Flow Sentiment</span></div>
+        <div class="pnl-hdr"><span class="pnl-title">Net Flow Sentiment</span><span class="pnl-ts" id="netFlowTs"></span></div>
         <div class="pnl-body"><div class="chart-box" style="height:180px"><canvas id="netChart"></canvas></div></div>
       </div>
     </div>
@@ -636,23 +639,31 @@ Chart.defaults.font.size = 10;
 
 let pcChartInst, strikeInst, netInst, volDonutInst, premDonutInst;
 
+function stampTs(id) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
 function renderPCChart() {
   const tk = TICKERS;
   const vals = tk.map(t => (liveFlow[t] || {}).pc || 0);
   const colors = vals.map(v => v < 0.7 ? '#4af6c3' : v > 1.0 ? '#ff433d' : '#fb8b1e');
   if (pcChartInst) pcChartInst.destroy();
   pcChartInst = new Chart(document.getElementById('pcChart'), {
-    type: 'bar', data: { labels: tk, datasets: [{ data: vals, backgroundColor: colors, borderWidth: 0, borderRadius: 2, barThickness: 18 }] },
+    type: 'bar', data: { labels: tk, datasets: [{ data: vals, backgroundColor: colors, borderWidth: 0, borderRadius: 2, barThickness: 14 }] },
     options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: false,
       plugins: { legend: { display: false } },
       scales: { x: { grid: { color: '#111' }, max: 1.5, ticks: { callback: v => v.toFixed(1) } }, y: { grid: { display: false }, ticks: { font: { weight: '600' } } } } }
   });
+  stampTs('pcTs');
 }
 
 function renderDonuts() {
+  const filter = document.getElementById('flowDistFilter')?.value || 'all';
+  const filteredTickers = filter === 'etfs' ? ['SPY','QQQ'] : filter === 'mag7' ? ['AAPL','MSFT','NVDA','TSLA','AMZN','GOOG','META'] : TICKERS;
   let tcv = 0, tpv = 0, tcp = 0, tpp = 0;
-  TICKERS.forEach(t => { tcv += (liveFlow[t] || {}).cv || 0; tpv += (liveFlow[t] || {}).pv || 0; });
-  Object.keys(liveUnusual).forEach(t => (liveUnusual[t] || []).forEach(a => { const p = (a.v||0) * (a.l||0) * 100; a.t === 'C' ? tcp += p : tpp += p; }));
+  filteredTickers.forEach(t => { tcv += (liveFlow[t] || {}).cv || 0; tpv += (liveFlow[t] || {}).pv || 0; });
+  filteredTickers.forEach(t => (liveUnusual[t] || []).forEach(a => { const p = (a.v||0) * (a.l||0) * 100; a.t === 'C' ? tcp += p : tpp += p; }));
   if (volDonutInst) volDonutInst.destroy();
   if (premDonutInst) premDonutInst.destroy();
   volDonutInst = new Chart(document.getElementById('volDonut'), {
@@ -663,6 +674,7 @@ function renderDonuts() {
     type: 'doughnut', data: { labels: ['Call $', 'Put $'], datasets: [{ data: [tcp, tpp], backgroundColor: ['#4af6c3', '#ff433d'], borderWidth: 0 }] },
     options: { responsive: true, maintainAspectRatio: false, animation: false, cutout: '65%', plugins: { legend: { position: 'bottom', labels: { boxWidth: 8, padding: 4, font: { size: 9 } } } } }
   });
+  stampTs('flowDistTs');
 }
 
 function renderStrikeChart() {
@@ -681,6 +693,7 @@ function renderStrikeChart() {
     type: 'bar', data: { labels: strikes, datasets: [{ label: 'Calls', data: cv, backgroundColor: '#4af6c3', borderWidth: 0, borderRadius: 1 }, { label: 'Puts', data: pv, backgroundColor: '#ff433d', borderWidth: 0, borderRadius: 1 }] },
     options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { labels: { boxWidth: 8, padding: 4 } } }, scales: { x: { grid: { color: '#111' } }, y: { grid: { color: '#111' } } } }
   });
+  stampTs('strikeTs');
 }
 
 function renderNetFlow() {
@@ -700,6 +713,7 @@ function renderNetFlow() {
     type: 'bar', data: { labels: tks, datasets: [{ label: 'Bullish', data: bull, backgroundColor: '#4af6c3', borderWidth: 0, borderRadius: 1 }, { label: 'Bearish', data: bear, backgroundColor: '#ff433d', borderWidth: 0, borderRadius: 1 }] },
     options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { labels: { boxWidth: 8, padding: 4 } } }, scales: { x: { grid: { color: '#111' }, stacked: false }, y: { grid: { display: false }, stacked: false } } }
   });
+  stampTs('netFlowTs');
 }
 
 function renderAllCharts() {
@@ -1121,6 +1135,7 @@ function init() {
   // Setup event listeners
   setupFilters();
   document.getElementById('strikeTk').addEventListener('change', renderStrikeChart);
+  document.getElementById('flowDistFilter').addEventListener('change', renderDonuts);
   document.getElementById('chainTk').addEventListener('change', function() {
     selectedChainTk = this.value;
     renderChain();
