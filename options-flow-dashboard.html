@@ -164,7 +164,8 @@ tbody tr:hover{background:#0f0f0f}
       <label class="conn-label">App Key</label>
       <input class="conn-input" id="localAppKey" placeholder="Your LSEG App Key (from Workspace)" autocomplete="off">
       <div style="color:var(--dim);font-size:10px;margin-bottom:8px">
-        Requires LSEG Workspace + local_bridge.py running on your machine.
+        Requires LSEG Workspace + local_bridge.py running on your machine.<br>
+        Open <span style="color:var(--dim)">localhost:8766</span> after starting the bridge for full browser support.
       </div>
       <button class="conn-btn" id="localConnect">CONNECT LOCAL</button>
     </div>
@@ -881,6 +882,15 @@ function setupConnectionOverlay() {
   // Local connect
   document.getElementById('localConnect').addEventListener('click', () => {
     errorEl.style.display = 'none';
+    // HTTPS pages can't connect to ws://localhost (Safari blocks mixed content)
+    if (window.location.protocol === 'https:') {
+      errorEl.innerHTML = 'Live mode requires the local bridge.<br>' +
+        'Open <a href="http://localhost:8766/options-flow-dashboard.html" ' +
+        'style="color:var(--accent);text-decoration:underline" target="_blank">' +
+        'localhost:8766</a> instead (bridge must be running).';
+      errorEl.style.display = 'block';
+      return;
+    }
     overlay.style.display = 'none';
     connectionMode = 'local';
     startLiveMode('local', {});
