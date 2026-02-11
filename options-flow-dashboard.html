@@ -295,6 +295,7 @@ tbody tr:hover{background:#0f0f0f}
             </tr></thead>
             <tbody id="chainBody"></tbody>
           </table>
+          <div id="chainNoData" style="display:none;text-align:center;padding:18px 12px;color:var(--dim);font-size:11px;letter-spacing:.3px;">Chain data unavailable &mdash; market may be closed or feed is delayed</div>
         </div>
       </div>
     </div>
@@ -483,7 +484,7 @@ class DataProvider {
             this.emit('quote', msg.ticker, msg.data);
             break;
           case 'flow_update':
-            this.emit('flow', msg.ticker, msg.data);
+            this.emit('flow', msg.ticker, msg.data, msg.flowCounter);
             break;
           case 'chain_update':
             this.emit('chain', msg.ticker, msg.expiration, msg.data);
@@ -579,7 +580,7 @@ function buildFlowRows() {
     });
   });
   rows.sort((a, b) => b.prem - a.prem);
-  orderCt = rows.length;
+  // orderCt is driven by backend flow_counter (not rows.length)
   totalPrem = rows.reduce((s, r) => s + r.prem, 0);
   return rows;
 }
@@ -651,6 +652,10 @@ function renderChain() {
   }).join('');
 
   document.getElementById('chainTitle').textContent = tk + ' Options Chain';
+
+  // Show/hide no-data indicator
+  const hasData = data.c.some(c => c.l || c.b || c.oi) || data.p.some(p => p.l || p.b || p.oi);
+  document.getElementById('chainNoData').style.display = hasData ? 'none' : 'block';
 }
 
 // ATM threshold per ticker for chain highlighting
@@ -978,6 +983,7 @@ function startLiveMode(mode, config) {
         if (msg.flow[tk].unusual) liveUnusual[tk] = msg.flow[tk].unusual;
       });
     }
+    if (msg.flowCounter != null) orderCt = msg.flowCounter;
     if (msg.expirations) {
       // Expirations can be a list (new) or object (legacy)
       const exps = Array.isArray(msg.expirations)
@@ -1014,9 +1020,10 @@ function startLiveMode(mode, config) {
     }
   });
 
-  provider.on('flow', (ticker, data) => {
+  provider.on('flow', (ticker, data, fc) => {
     liveFlow[ticker] = data;
     if (data.unusual) liveUnusual[ticker] = data.unusual;
+    if (fc != null) orderCt = fc;
     renderFlow();
     renderSentiment();
     renderAllCharts();

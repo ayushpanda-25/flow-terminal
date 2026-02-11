@@ -613,12 +613,19 @@ def fetch_chain_snapshot(ticker: str, expiration: str) -> Optional[dict]:
         else:
             puts.append(parsed)
 
+    # Warn if chain came back but every field is empty (pre-market / delayed feed)
+    non_empty = sum(1 for c in calls if c.get("l") or c.get("b") or c.get("oi"))
+    non_empty += sum(1 for p in puts if p.get("l") or p.get("b") or p.get("oi"))
+    if non_empty == 0:
+        logger.warning("Chain %s %s: all fields empty (pre-market / delayed feed)", ticker, expiration)
+
     return {"c": calls, "p": puts}
 
 
 async def poll_chains_loop():
     """Periodically fetch options chains for all tickers across multiple expirations."""
     CHAIN_EXPS = 5  # Fetch chains for nearest N expirations (5 × 9 tickers = 45 fetches)
+    cycle = 0
 
     while True:
         try:
@@ -660,19 +667,54 @@ async def poll_chains_loop():
         except Exception as e:
             logger.error("Chain poll error: %s", e, exc_info=True)
 
-        await asyncio.sleep(POLL_CHAINS_SEC)
+        cycle += 1
+        delay = 10 if cycle <= 3 else POLL_CHAINS_SEC
+        await asyncio.sleep(delay)
 
 
 # ─── Flow / Unusual Activity Polling ─────────────────────────────────────────
 
+flow_seen = {}       # {ticker: set of (exp, strike, type)} — permanent dedup (never cleared)
+flow_active = {}     # {ticker: {(exp, strike, type): order_dict}} — current live orders for display
+flow_counter = 0     # Running count of unique discoveries (grows, resets at cap)
+FLOW_CAP = 180       # When counter hits this, reset display + counter
+FLOW_KEEP = 50       # Keep top N by premium in display after reset
+
+
+def _prune_flow_display():
+    """Reset display list to top FLOW_KEEP by premium, reset counter to FLOW_KEEP.
+    flow_seen (dedup set) is NOT cleared so old orders aren't re-counted."""
+    global flow_active, flow_counter
+    all_items = []
+    for tk, orders in flow_active.items():
+        for key, order in orders.items():
+            prem = order.get("v", 0) * order.get("l", 0) * 100
+            all_items.append((tk, key, order, prem))
+    all_items.sort(key=lambda x: x[3], reverse=True)
+    kept = all_items[:FLOW_KEEP]
+    flow_active = {}
+    for tk, key, order, _ in kept:
+        if tk not in flow_active:
+            flow_active[tk] = {}
+        flow_active[tk][key] = order
+    flow_counter = FLOW_KEEP
+    logger.info("Flow reset: %d → %d (kept top %d by premium)", FLOW_CAP, FLOW_KEEP, FLOW_KEEP)
+
+
 def compute_flow(ticker: str) -> Optional[dict]:
-    """Compute flow stats from latest chain data (scans ALL expirations)."""
+    """Compute flow stats from latest chain data (scans ALL expirations).
+    Tracks unique orders; counter grows as new contracts are discovered.
+    Resets display at FLOW_CAP back to FLOW_KEEP and continues growing."""
+    global flow_counter
     chain_exps = latest_chains.get(ticker, {})
     if not chain_exps:
         return None
 
     cv, pv = 0, 0
-    unusual = []
+    if ticker not in flow_seen:
+        flow_seen[ticker] = set()
+    if ticker not in flow_active:
+        flow_active[ticker] = {}
 
     for exp_date, chain in chain_exps.items():
         if not chain:
@@ -685,11 +727,20 @@ def compute_flow(ticker: str) -> Optional[dict]:
             oi = c.get("oi")
             cv += vol
             if vol > 0 and last > 0:
-                unusual.append({
+                key = (exp_date, c["s"], "C")
+                entry = {
                     "s": c["s"], "t": "C", "v": int(vol),
                     "l": last, "d": round(delta, 4),
                     "exp": exp_date, "oi": oi,
-                })
+                }
+                if key not in flow_seen[ticker]:
+                    # Brand new order — add to display and count
+                    flow_seen[ticker].add(key)
+                    flow_active[ticker][key] = entry
+                    flow_counter += 1
+                elif key in flow_active[ticker]:
+                    # Already in display — update live values
+                    flow_active[ticker][key] = entry
 
         for p in chain.get("p", []):
             vol = p.get("v") or 0
@@ -698,15 +749,22 @@ def compute_flow(ticker: str) -> Optional[dict]:
             oi = p.get("oi")
             pv += vol
             if vol > 0 and last > 0:
-                unusual.append({
+                key = (exp_date, p["s"], "P")
+                entry = {
                     "s": p["s"], "t": "P", "v": int(vol),
                     "l": last, "d": round(delta, 4),
                     "exp": exp_date, "oi": oi,
-                })
+                }
+                if key not in flow_seen[ticker]:
+                    flow_seen[ticker].add(key)
+                    flow_active[ticker][key] = entry
+                    flow_counter += 1
+                elif key in flow_active[ticker]:
+                    flow_active[ticker][key] = entry
 
-    # Sort by premium descending, take top 20
+    # Build result for this ticker from active display orders
+    unusual = list(flow_active.get(ticker, {}).values())
     unusual.sort(key=lambda x: x["v"] * x["l"] * 100, reverse=True)
-    unusual = unusual[:20]
 
     pc = round(pv / cv, 3) if cv > 0 else 0.0
 
@@ -728,7 +786,24 @@ async def poll_flow_loop():
                         "type": "flow_update",
                         "ticker": ticker,
                         "data": flow,
+                        "flowCounter": flow_counter,
                     })
+            # Check cap after full cycle — prune and re-broadcast all
+            if flow_counter >= FLOW_CAP:
+                _prune_flow_display()
+                # Re-broadcast all tickers with pruned data
+                for ticker in RIC_TO_TICKER.values():
+                    unusual = list(flow_active.get(ticker, {}).values())
+                    unusual.sort(key=lambda x: x["v"] * x["l"] * 100, reverse=True)
+                    lf = latest_flow.get(ticker)
+                    if lf:
+                        lf["unusual"] = unusual
+                        schedule_broadcast({
+                            "type": "flow_update",
+                            "ticker": ticker,
+                            "data": lf,
+                            "flowCounter": flow_counter,
+                        })
         except Exception as e:
             logger.error("Flow poll error: %s", e)
 
@@ -758,6 +833,7 @@ async def ws_handler(websocket):
             "chains": dict(latest_chains),
             "expirations": all_exps,
             "flow": latest_flow,
+            "flowCounter": flow_counter,
             "status": init_status,
             "msg": init_msg,
         }
