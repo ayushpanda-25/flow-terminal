@@ -502,7 +502,7 @@ def fetch_chain_snapshot(ticker: str, expiration: str) -> Optional[dict]:
 
 async def poll_chains_loop():
     """Periodically fetch options chains for all tickers across multiple expirations."""
-    CHAIN_EXPS = 3  # Fetch chains for nearest N expirations (keeps API calls manageable)
+    CHAIN_EXPS = 5  # Fetch chains for nearest N expirations (5 × 9 tickers = 45 fetches)
 
     while True:
         try:
@@ -550,38 +550,43 @@ async def poll_chains_loop():
 # ─── Flow / Unusual Activity Polling ─────────────────────────────────────────
 
 def compute_flow(ticker: str) -> Optional[dict]:
-    """Compute flow stats from latest chain data (uses nearest expiration)."""
+    """Compute flow stats from latest chain data (scans ALL expirations)."""
     chain_exps = latest_chains.get(ticker, {})
     if not chain_exps:
-        return None
-    chain = next(iter(chain_exps.values()))  # Use first (nearest) expiration
-    if not chain:
         return None
 
     cv, pv = 0, 0
     unusual = []
 
-    for c in chain.get("c", []):
-        vol = c.get("v") or 0
-        last = c.get("l") or 0
-        delta = c.get("d") or 0
-        cv += vol
-        if vol > 0 and last > 0:
-            unusual.append({
-                "s": c["s"], "t": "C", "v": int(vol),
-                "l": last, "d": round(delta, 4),
-            })
+    for exp_date, chain in chain_exps.items():
+        if not chain:
+            continue
 
-    for p in chain.get("p", []):
-        vol = p.get("v") or 0
-        last = p.get("l") or 0
-        delta = p.get("d") or 0
-        pv += vol
-        if vol > 0 and last > 0:
-            unusual.append({
-                "s": p["s"], "t": "P", "v": int(vol),
-                "l": last, "d": round(delta, 4),
-            })
+        for c in chain.get("c", []):
+            vol = c.get("v") or 0
+            last = c.get("l") or 0
+            delta = c.get("d") or 0
+            oi = c.get("oi")
+            cv += vol
+            if vol > 0 and last > 0:
+                unusual.append({
+                    "s": c["s"], "t": "C", "v": int(vol),
+                    "l": last, "d": round(delta, 4),
+                    "exp": exp_date, "oi": oi,
+                })
+
+        for p in chain.get("p", []):
+            vol = p.get("v") or 0
+            last = p.get("l") or 0
+            delta = p.get("d") or 0
+            oi = p.get("oi")
+            pv += vol
+            if vol > 0 and last > 0:
+                unusual.append({
+                    "s": p["s"], "t": "P", "v": int(vol),
+                    "l": last, "d": round(delta, 4),
+                    "exp": exp_date, "oi": oi,
+                })
 
     # Sort by premium descending, take top 20
     unusual.sort(key=lambda x: x["v"] * x["l"] * 100, reverse=True)
