@@ -67,7 +67,7 @@ td:first-child{text-align:left}
 tbody tr:hover{background:#0f0f0f}
 
 /* Flow table specifics */
-.tbl-wrap{max-height:420px;overflow-y:auto}
+.tbl-wrap{max-height:320px;overflow-y:auto}
 .call-row{border-left:2px solid var(--green)}
 .put-row{border-left:2px solid var(--red)}
 .golden-row{background:#1a1200 !important;border-left:2px solid var(--yellow)}
@@ -258,7 +258,7 @@ tbody tr:hover{background:#0f0f0f}
       </div>
       <div class="pnl">
         <div class="pnl-hdr"><span class="pnl-title">Flow Distribution</span><span class="pnl-ts" id="flowDistTs"></span>
-          <select class="fsel" id="flowDistFilter" style="margin-left:6px"><option value="all">All</option><option value="etfs">ETFs</option><option value="mag7">Mag 7</option></select>
+          <select class="fsel" id="flowDistFilter" style="margin-left:6px"><option value="all">All</option><option>SPY</option><option>QQQ</option><option>AAPL</option><option>MSFT</option><option>NVDA</option><option>TSLA</option><option>AMZN</option><option>GOOG</option><option>META</option></select>
         </div>
         <div class="pnl-body">
           <div class="row">
@@ -305,11 +305,11 @@ tbody tr:hover{background:#0f0f0f}
             <option>TSLA</option><option>AMZN</option><option>GOOG</option><option>META</option>
           </select>
         </div>
-        <div class="pnl-body"><div class="chart-box" style="height:220px"><canvas id="strikeChart"></canvas></div></div>
+        <div class="pnl-body"><div class="chart-box" style="height:280px"><canvas id="strikeChart"></canvas></div></div>
       </div>
       <div class="pnl">
         <div class="pnl-hdr"><span class="pnl-title">Net Flow Sentiment</span><span class="pnl-ts" id="netFlowTs"></span></div>
-        <div class="pnl-body"><div class="chart-box" style="height:180px"><canvas id="netChart"></canvas></div></div>
+        <div class="pnl-body"><div class="chart-box" style="height:240px"><canvas id="netChart"></canvas></div></div>
       </div>
     </div>
   </div>
@@ -660,7 +660,7 @@ function renderPCChart() {
 
 function renderDonuts() {
   const filter = document.getElementById('flowDistFilter')?.value || 'all';
-  const filteredTickers = filter === 'etfs' ? ['SPY','QQQ'] : filter === 'mag7' ? ['AAPL','MSFT','NVDA','TSLA','AMZN','GOOG','META'] : TICKERS;
+  const filteredTickers = filter === 'all' ? TICKERS : [filter];
   let tcv = 0, tpv = 0, tcp = 0, tpp = 0;
   filteredTickers.forEach(t => { tcv += (liveFlow[t] || {}).cv || 0; tpv += (liveFlow[t] || {}).pv || 0; });
   filteredTickers.forEach(t => (liveUnusual[t] || []).forEach(a => { const p = (a.v||0) * (a.l||0) * 100; a.t === 'C' ? tcp += p : tpp += p; }));
