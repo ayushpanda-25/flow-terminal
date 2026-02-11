@@ -1072,7 +1072,9 @@ function demoTickChainPrices() {
     c.b = Math.max(0.01, Math.round((c.b + mv * 0.5) * 100) / 100);
     c.a = Math.max(0.01, Math.round((c.a + mv * 0.5) * 100) / 100);
     if (c.b >= c.a) c.a = c.b + 0.01;
-    const el = document.getElementById('cc-' + tk + '-' + c.s); if (el) el.textContent = fmtD(c.l);
+    // Simulate volume arriving at this strike
+    const vAdd = Math.random() < 0.4 ? Math.floor(Math.random() * (c.v || 50) * 0.08) : 0;
+    c.v = (c.v || 0) + vAdd;
   });
   data.p.forEach(p => {
     if (p.b == null || p.a == null) return;
@@ -1081,8 +1083,11 @@ function demoTickChainPrices() {
     p.b = Math.max(0.01, Math.round((p.b + mv * 0.5) * 100) / 100);
     p.a = Math.max(0.01, Math.round((p.a + mv * 0.5) * 100) / 100);
     if (p.b >= p.a) p.a = p.b + 0.01;
-    const el = document.getElementById('cp-' + tk + '-' + p.s); if (el) el.textContent = fmtD(p.l);
+    const vAdd = Math.random() < 0.4 ? Math.floor(Math.random() * (p.v || 50) * 0.08) : 0;
+    p.v = (p.v || 0) + vAdd;
   });
+  renderChain();
+  renderStrikeChart();
 }
 
 function demoInjectOrder(pool) {
