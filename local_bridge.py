@@ -679,21 +679,34 @@ flow_seen = {}       # {ticker: set of (exp, strike, type)} — permanent dedup 
 flow_active = {}     # {ticker: {(exp, strike, type): order_dict}} — current live orders for display
 flow_counter = 0     # Running count of unique discoveries (grows, resets at cap)
 flow_seq = 0         # Monotonic sequence for sort ordering (newest = highest)
-FLOW_CAP_PER_TK = 20 # Per-ticker cap — prune when a ticker hits this
-FLOW_KEEP_PER_TK = 6 # Keep top N per ticker after prune
+
+# Tiered caps: high-volume ETFs get deeper tables, individual stocks get less
+HIGH_VOL_TICKERS = {"SPY", "QQQ", "TSLA"}
+FLOW_CAP_HIGH = 50   # Prune trigger for high-volume names
+FLOW_KEEP_HIGH = 25  # Keep after prune
+FLOW_CAP_LOW = 25    # Prune trigger for lower-volume names
+FLOW_KEEP_LOW = 10   # Keep after prune
+
+
+def _ticker_limits(ticker: str):
+    """Return (cap, keep) for a ticker based on its volume tier."""
+    if ticker in HIGH_VOL_TICKERS:
+        return FLOW_CAP_HIGH, FLOW_KEEP_HIGH
+    return FLOW_CAP_LOW, FLOW_KEEP_LOW
 
 
 def _prune_ticker(ticker: str):
-    """Prune a single ticker's display orders to FLOW_KEEP_PER_TK (top by premium)."""
+    """Prune a single ticker's display orders to its tier's keep limit (top by premium)."""
     global flow_counter
+    cap, keep = _ticker_limits(ticker)
     orders = flow_active.get(ticker, {})
-    if len(orders) <= FLOW_KEEP_PER_TK:
+    if len(orders) <= keep:
         return
     items = sorted(orders.items(), key=lambda x: x[1].get("v", 0) * x[1].get("l", 0) * 100, reverse=True)
-    pruned_count = len(items) - FLOW_KEEP_PER_TK
-    flow_active[ticker] = dict(items[:FLOW_KEEP_PER_TK])
+    pruned_count = len(items) - keep
+    flow_active[ticker] = dict(items[:keep])
     flow_counter = max(0, flow_counter - pruned_count)
-    logger.info("Flow prune %s: %d → %d orders", ticker, len(items), FLOW_KEEP_PER_TK)
+    logger.info("Flow prune %s: %d → %d orders", ticker, len(items), keep)
 
 
 def compute_flow(ticker: str) -> Optional[dict]:
@@ -788,9 +801,10 @@ async def poll_flow_loop():
             for ticker in RIC_TO_TICKER.values():
                 flow = await asyncio.to_thread(compute_flow, ticker)
                 if flow:
-                    # Per-ticker prune if this ticker exceeded cap
+                    # Per-ticker prune if this ticker exceeded its tier cap
                     tk_count = len(flow_active.get(ticker, {}))
-                    if tk_count >= FLOW_CAP_PER_TK:
+                    cap, _ = _ticker_limits(ticker)
+                    if tk_count >= cap:
                         _prune_ticker(ticker)
                         # Rebuild unusual list from pruned flow_active
                         unusual = list(flow_active.get(ticker, {}).values())
