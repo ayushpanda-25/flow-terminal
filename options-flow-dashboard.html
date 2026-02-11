@@ -185,7 +185,7 @@ tbody tr:hover{background:#0f0f0f}
       Local mode: data goes Browser ↔ localhost only.<br>
       Server mode: credentials sent over WebSocket (use WSS in production).
     </div>
-    <div class="conn-demo"><a id="demoLink">Launch Demo Mode (simulated data)</a></div>
+    <div class="conn-demo"><a id="demoLink" href="?demo" target="_blank">Launch Demo Mode (simulated data)</a></div>
   </div>
 </div>
 
@@ -905,11 +905,7 @@ function setupConnectionOverlay() {
     startLiveMode('server', { serverUrl, appKey, username, password });
   });
 
-  // Demo link
-  document.getElementById('demoLink').addEventListener('click', () => {
-    overlay.style.display = 'none';
-    startDemoMode();
-  });
+  // Demo link opens ?demo in new tab via href/target="_blank" on the anchor
 }
 
 // ==================== LIVE MODE ====================
