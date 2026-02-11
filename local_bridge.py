@@ -60,6 +60,7 @@ APP_KEY = os.environ.get(
     "EIKON_APP_KEY", "d5f36229fb7344078aa2fa3de7e5fca8be6e11a6"
 )
 WS_PORT = int(os.environ.get("FLOW_WS_PORT", "8765"))
+HTTP_PORT = int(os.environ.get("FLOW_HTTP_PORT", "8766"))
 
 # ── RIC resolution: try multiple exchange suffixes for real-time entitlements ──
 # .P = Primary, .A = NYSE Arca, .O/.OQ = NASDAQ, .N = NYSE
@@ -658,6 +659,26 @@ async def ws_handler(websocket):
         logger.info("Browser disconnected: %s", remote)
 
 
+# ─── HTTP file server (for Safari / cross-browser support) ────────────────────
+
+def start_http_server(directory: str, port: int):
+    """Start a simple HTTP file server in a daemon thread."""
+    import http.server
+    import threading
+
+    class QuietHandler(http.server.SimpleHTTPRequestHandler):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, directory=directory, **kwargs)
+        def log_message(self, fmt, *args):
+            pass  # Suppress noisy per-request logs
+
+    server = http.server.HTTPServer(("localhost", port), QuietHandler)
+    server.daemon_threads = True
+    t = threading.Thread(target=server.serve_forever, daemon=True)
+    t.start()
+    return server
+
+
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 async def main():
@@ -703,10 +724,15 @@ async def main():
     for sig in (signal.SIGINT, signal.SIGTERM):
         event_loop.add_signal_handler(sig, _shutdown)
 
+    # 5. Start HTTP file server (so Safari and other browsers can connect)
+    http_dir = os.path.dirname(os.path.abspath(__file__))
+    http_srv = start_http_server(http_dir, HTTP_PORT)
+
     async with websockets.serve(ws_handler, "localhost", WS_PORT):
         logger.info("")
-        logger.info("  Bridge ready! Streaming to ws://localhost:%d", WS_PORT)
-        logger.info("  Open options-flow-dashboard.html in your browser.")
+        logger.info("  Bridge ready!")
+        logger.info("  WebSocket:  ws://localhost:%d", WS_PORT)
+        logger.info("  Dashboard:  http://localhost:%d/options-flow-dashboard.html", HTTP_PORT)
         logger.info("  Press Ctrl+C to stop.")
         logger.info("")
         await stop_event.wait()

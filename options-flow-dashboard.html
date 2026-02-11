@@ -225,8 +225,8 @@ tbody tr:hover{background:#0f0f0f}
           <div class="feed-banner">
             <div class="feed-dot" id="feedDot"></div>
             <span id="feedLabel">Live Feed</span>
-            <span>|</span>
-            <span>Streaming <span class="feed-ct" id="feedAge">0s</span> ago</span>
+            <span id="feedPipe">|</span>
+            <span id="feedStream">Streaming <span class="feed-ct" id="feedAge">0s</span> ago</span>
           </div>
           <div id="marketClosedBanner" style="display:none;background:#1a1200;border:1px solid #fb8b1e;color:#fb8b1e;padding:4px 10px;font-size:11px;text-align:center;border-radius:4px;margin-bottom:6px;">MARKET CLOSED — Showing last available data</div>
           <div class="filters">
@@ -784,6 +784,15 @@ function updateConnectionStatus(status, mode, msg) {
   // Market closed banner
   const mcBanner = document.getElementById('marketClosedBanner');
   if (mcBanner) mcBanner.style.display = (msg === 'Market closed') ? '' : 'none';
+
+  // Hide streaming counter when market is closed
+  const feedPipe = document.getElementById('feedPipe');
+  const feedStream = document.getElementById('feedStream');
+  if (feedPipe && feedStream) {
+    const showStream = (msg !== 'Market closed');
+    feedPipe.style.display = showStream ? '' : 'none';
+    feedStream.style.display = showStream ? '' : 'none';
+  }
 
   if (status === 'connected' || status === 'connecting') {
     if (mode === 'local') {
