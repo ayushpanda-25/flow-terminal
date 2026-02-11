@@ -247,7 +247,7 @@ tbody tr:hover{background:#0f0f0f}
           </div>
           <div class="tbl-wrap">
             <table><thead><tr>
-              <th>Ticker</th><th>Exp</th><th>Type</th><th>Strike</th><th>Last</th><th>Vol</th><th>OI</th><th>Premium</th><th>Delta</th><th>Signal</th>
+              <th>Ticker</th><th>Exp</th><th>Type</th><th>Strike</th><th>Last</th><th>Vol</th><th>OI</th><th>Premium</th><th>Delta</th><th>Signal</th><th>Time</th>
             </tr></thead><tbody id="flowBody"></tbody></table>
           </div>
         </div>
@@ -278,6 +278,7 @@ tbody tr:hover{background:#0f0f0f}
       <div class="pnl">
         <div class="pnl-hdr">
           <span class="pnl-title" id="chainTitle">SPY Options Chain</span>
+          <span class="pnl-ts" id="chainAge" style="color:var(--dim);font-size:10px;margin-left:8px;"></span>
           <div class="chain-sel">
             <select class="fsel" id="chainTk">
               <option>SPY</option><option>QQQ</option><option>AAPL</option><option>MSFT</option><option>NVDA</option>
@@ -434,7 +435,7 @@ const liveChains = {};
 let availableExpirations = [];
 let selectedChainTk = 'SPY';
 let selectedChainExp = '';
-let orderCt = 0, totalPrem = 0, feedAge = 0;
+let orderCt = 0, totalPrem = 0, feedAge = 0, chainAge = 0;
 let connectionMode = 'demo'; // 'local', 'server', 'demo'
 let isRealtime = false;
 
@@ -576,10 +577,10 @@ function buildFlowRows() {
     (liveUnusual[tk] || []).forEach(a => {
       const prem = (a.v || 0) * (a.l || 0) * 100;
       const s = sig(a.d || 0, a.t);
-      rows.push({ tk, t: a.t, s: a.s, l: a.l || 0, v: a.v || 0, d: a.d || 0, oi: a.oi || null, exp: a.exp || '', prem, sig: s });
+      rows.push({ tk, t: a.t, s: a.s, l: a.l || 0, v: a.v || 0, d: a.d || 0, oi: a.oi || null, exp: a.exp || '', prem, sig: s, ts: a.ts || '', seq: a._seq || 0 });
     });
   });
-  rows.sort((a, b) => b.prem - a.prem);
+  rows.sort((a, b) => b.seq - a.seq);
   // orderCt is driven by backend flow_counter (not rows.length)
   totalPrem = rows.reduce((s, r) => s + r.prem, 0);
   return rows;
@@ -596,7 +597,7 @@ function renderFlow() {
     const sc = sigCls(r.sig);
     const gt = golden ? '<span class="golden-tag">\u2605</span>' : '';
     const expStr = r.exp ? `<span class="exp-tag">${r.exp}</span>` : '';
-    return `<tr class="${golden?'golden-row':rc}"><td><b>${r.tk}</b></td><td>${expStr}</td><td><span class="badge ${bc}">${tl}</span></td><td>$${r.s}</td><td>${fmtD(r.l)}</td><td>${fmtN(r.v)}</td><td>${fmtOI(r.oi)}</td><td>${gt}<b>${fmtP(r.prem)}</b></td><td>${(r.d).toFixed(4)}</td><td><span class="${sc}">${r.sig}</span></td></tr>`;
+    return `<tr class="${golden?'golden-row':rc}"><td><b>${r.tk}</b></td><td>${expStr}</td><td><span class="badge ${bc}">${tl}</span></td><td>$${r.s}</td><td>${fmtD(r.l)}</td><td>${fmtN(r.v)}</td><td>${fmtOI(r.oi)}</td><td>${gt}<b>${fmtP(r.prem)}</b></td><td>${(r.d).toFixed(4)}</td><td><span class="${sc}">${r.sig}</span></td><td style="color:var(--dim)">${r.ts}</td></tr>`;
   }).join('');
   document.getElementById('flowCount').textContent = rows.length + ' orders';
   document.getElementById('orderCt').textContent = orderCt.toLocaleString();
@@ -999,7 +1000,6 @@ function startLiveMode(mode, config) {
     const prev = lp[ticker] || {};
     Object.keys(data).forEach(k => { if (data[k] != null) prev[k] = data[k]; });
     lp[ticker] = prev;
-    feedAge = 0;
 
     // Efficient DOM update (no full re-render)
     const pe = document.getElementById('tp-' + ticker);
@@ -1023,6 +1023,7 @@ function startLiveMode(mode, config) {
   provider.on('flow', (ticker, data, fc) => {
     liveFlow[ticker] = data;
     if (data.unusual) liveUnusual[ticker] = data.unusual;
+    if (fc != null && fc > orderCt) feedAge = 0;  // new order arrived
     if (fc != null) orderCt = fc;
     renderFlow();
     renderSentiment();
@@ -1032,7 +1033,7 @@ function startLiveMode(mode, config) {
   provider.on('chain', (ticker, expiration, data) => {
     if (!liveChains[ticker]) liveChains[ticker] = {};
     liveChains[ticker][expiration] = data;
-    if (ticker === selectedChainTk) renderChain();
+    if (ticker === selectedChainTk) { chainAge = 0; renderChain(); }
     if (ticker === document.getElementById('strikeTk').value) renderStrikeChart();
   });
 
@@ -1231,7 +1232,10 @@ function init() {
 
   // Clock
   setInterval(tickClock, 1000);
-  setInterval(() => { feedAge++; const e = document.getElementById('feedAge'); if (e) e.textContent = feedAge + 's'; }, 1000);
+  setInterval(() => {
+    feedAge++; const e = document.getElementById('feedAge'); if (e) e.textContent = feedAge + 's';
+    chainAge++; const ca = document.getElementById('chainAge'); if (ca) ca.textContent = chainAge + 's ago';
+  }, 1000);
 
   // Setup connection overlay (or auto-demo)
   setupConnectionOverlay();
