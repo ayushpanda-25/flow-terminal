@@ -8,8 +8,8 @@ then relays normalized JSON to browser clients over ws://localhost:8765.
 
 Usage:
     1. Ensure LSEG Workspace is running and signed in.
-    2. pip install refinitiv-data websockets
-    3. python local_bridge.py
+    2. pip3 install refinitiv-data websockets
+    3. python3 local_bridge.py
     4. Open options-flow-dashboard.html → select "Local Mode"
 """
 
@@ -675,6 +675,9 @@ def start_http_server(directory: str, port: int):
     class QuietHandler(http.server.SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, directory=directory, **kwargs)
+        def end_headers(self):
+            self.send_header('Access-Control-Allow-Origin', '*')
+            super().end_headers()
         def log_message(self, fmt, *args):
             pass  # Suppress noisy per-request logs
 
@@ -734,7 +737,7 @@ async def main():
     http_dir = os.path.dirname(os.path.abspath(__file__))
     http_srv = start_http_server(http_dir, HTTP_PORT)
 
-    async with websockets.serve(ws_handler, "localhost", WS_PORT):
+    async with websockets.serve(ws_handler, "localhost", WS_PORT, origins=None):
         logger.info("")
         logger.info("  Bridge ready!")
         logger.info("  WebSocket:  ws://localhost:%d", WS_PORT)
