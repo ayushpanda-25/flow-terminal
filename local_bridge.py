@@ -154,17 +154,89 @@ def build_option_ric(underlying: str, expiration: str, option_type: str, strike:
     return f"{underlying.upper()}{mc}{day}{yr}{sn}.U"
 
 
+# US market holidays (month, day) — fixed-date holidays
+# Floating holidays (MLK, Presidents, Memorial, Labor, Thanksgiving) use weekday rules
+def _us_market_holidays(year: int) -> set:
+    """Return set of date objects for US market holidays in a given year."""
+    from datetime import date
+    holidays = set()
+    # New Year's Day
+    holidays.add(date(year, 1, 1))
+    # MLK Day — 3rd Monday of January
+    d = date(year, 1, 1)
+    mon_count = 0
+    while mon_count < 3:
+        if d.weekday() == 0:
+            mon_count += 1
+            if mon_count == 3:
+                holidays.add(d)
+        d += timedelta(days=1)
+    # Presidents' Day — 3rd Monday of February
+    d = date(year, 2, 1)
+    mon_count = 0
+    while mon_count < 3:
+        if d.weekday() == 0:
+            mon_count += 1
+            if mon_count == 3:
+                holidays.add(d)
+        d += timedelta(days=1)
+    # Good Friday — 2 days before Easter (approximate with Anonymous Gregorian algorithm)
+    a = year % 19
+    b = year // 100
+    c = year % 100
+    dd = b // 4
+    e = b % 4
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - dd - g + 15) % 30
+    i = c // 4
+    k = c % 4
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    month = (h + l - 7 * m + 114) // 31
+    day = ((h + l - 7 * m + 114) % 31) + 1
+    easter = date(year, month, day)
+    holidays.add(easter - timedelta(days=2))
+    # Memorial Day — last Monday of May
+    d = date(year, 5, 31)
+    while d.weekday() != 0:
+        d -= timedelta(days=1)
+    holidays.add(d)
+    # Juneteenth
+    holidays.add(date(year, 6, 19))
+    # Independence Day
+    holidays.add(date(year, 7, 4))
+    # Labor Day — 1st Monday of September
+    d = date(year, 9, 1)
+    while d.weekday() != 0:
+        d += timedelta(days=1)
+    holidays.add(d)
+    # Thanksgiving — 4th Thursday of November
+    d = date(year, 11, 1)
+    thu_count = 0
+    while thu_count < 4:
+        if d.weekday() == 3:
+            thu_count += 1
+            if thu_count == 4:
+                holidays.add(d)
+        d += timedelta(days=1)
+    # Christmas
+    holidays.add(date(year, 12, 25))
+    return holidays
+
+
 def get_next_expirations(n: int = 8) -> List[str]:
     """Return the next N option expiration dates as YYYY-MM-DD strings.
 
     SPY/QQQ have daily (0DTE) expirations every business day.
-    We return every weekday (Mon-Fri) going forward.
+    We return every weekday (Mon-Fri) going forward, excluding US market holidays.
     """
     today = datetime.now().date()
+    holidays = _us_market_holidays(today.year) | _us_market_holidays(today.year + 1)
     candidates = []
     d = today
-    for _ in range(45):
-        if d.weekday() < 5:  # Mon-Fri
+    for _ in range(60):
+        if d.weekday() < 5 and d not in holidays:  # Mon-Fri, not a holiday
             if d > today or (d == today and datetime.now().hour < 16):
                 candidates.append(d.strftime("%Y-%m-%d"))
                 if len(candidates) >= n:
