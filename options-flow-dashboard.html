@@ -1195,11 +1195,12 @@ function demoInjectOrder(pool) {
 // ==================== CLOCK & FEED AGE ====================
 function tickClock() {
   const n = new Date();
-  const h = String(n.getHours()).padStart(2, '0');
-  const m = String(n.getMinutes()).padStart(2, '0');
-  const s = String(n.getSeconds()).padStart(2, '0');
-  document.getElementById('clock').textContent = h + ':' + m + ':' + s + ' EST';
-  document.getElementById('ftrTime').textContent = n.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' ' + h + ':' + m + ':' + s;
+  const eastern = n.toLocaleTimeString('en-US', {
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false, timeZone: 'America/New_York'
+  });
+  document.getElementById('clock').textContent = eastern + '  EST';
+  document.getElementById('ftrTime').textContent = n.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' ' + eastern;
 }
 
 // ==================== FULL RENDER ====================
