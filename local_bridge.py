@@ -21,7 +21,10 @@ import os
 import signal
 import sys
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
+
+ET = ZoneInfo("America/New_York")
 from typing import Optional, Dict, List, Any
 
 import pandas as pd
@@ -744,7 +747,7 @@ def compute_flow(ticker: str) -> Optional[dict]:
                 if key not in flow_seen[ticker]:
                     # Brand new order — add to display and count
                     flow_seq += 1
-                    entry["ts"] = time.strftime("%H:%M:%S")
+                    entry["ts"] = datetime.now(ET).strftime("%H:%M:%S")
                     entry["_seq"] = flow_seq
                     flow_seen[ticker].add(key)
                     flow_active[ticker][key] = entry
@@ -771,7 +774,7 @@ def compute_flow(ticker: str) -> Optional[dict]:
                 }
                 if key not in flow_seen[ticker]:
                     flow_seq += 1
-                    entry["ts"] = time.strftime("%H:%M:%S")
+                    entry["ts"] = datetime.now(ET).strftime("%H:%M:%S")
                     entry["_seq"] = flow_seq
                     flow_seen[ticker].add(key)
                     flow_active[ticker][key] = entry
