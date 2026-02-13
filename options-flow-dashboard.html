@@ -145,6 +145,10 @@ tbody tr:hover{background:#0f0f0f}
 .conn-demo{text-align:center;margin-top:12px}
 .conn-demo a{color:var(--dim);font-size:10px;text-decoration:underline;cursor:pointer}
 .conn-demo a:hover{color:var(--orange)}
+.conn-steps{color:var(--dim);font-size:10px;line-height:1.8;margin-bottom:12px;padding:0;list-style:none}
+.conn-steps li{padding-left:16px;position:relative}
+.conn-steps li::before{content:attr(data-n);position:absolute;left:0;color:var(--orange);font-weight:700}
+.conn-steps code{color:var(--mid);background:#1a1a1a;padding:1px 5px;font-size:9px;border-radius:2px}
 
 /* Responsive */
 @media(max-width:1200px){.sent-grid{grid-template-columns:repeat(3,1fr)}.chain-wrap{overflow-x:auto}}
@@ -163,14 +167,22 @@ tbody tr:hover{background:#0f0f0f}
       <div class="conn-mode-btn" data-mode="server">SERVER MODE</div>
     </div>
     <div class="conn-section active" id="connLocal">
+      <ol class="conn-steps">
+        <li data-n="1.">Install LSEG Workspace and sign in</li>
+        <li data-n="2.">Run <code>pip install refinitiv-data websockets</code></li>
+        <li data-n="3.">Start the bridge: <code>python3 local_bridge.py</code></li>
+        <li data-n="4.">Enter your App Key below and connect</li>
+      </ol>
       <label class="conn-label">App Key</label>
       <input class="conn-input" id="localAppKey" placeholder="Your LSEG App Key (from Workspace)" autocomplete="off">
-      <div style="color:var(--dim);font-size:10px;margin-bottom:8px">
-        Requires LSEG Workspace + local_bridge.py running on your machine.
-      </div>
       <button class="conn-btn" id="localConnect">CONNECT LOCAL</button>
     </div>
     <div class="conn-section" id="connServer">
+      <ol class="conn-steps">
+        <li data-n="1.">Ensure the relay server is running (<code>server.py</code>)</li>
+        <li data-n="2.">Enter the WebSocket URL, App Key, and LSEG platform credentials below</li>
+        <li data-n="3.">Use <code>wss://</code> for production deployments</li>
+      </ol>
       <label class="conn-label">Server URL</label>
       <input class="conn-input" id="serverUrl" placeholder="ws://localhost:8000/ws" value="ws://localhost:8000/ws" autocomplete="off">
       <label class="conn-label">App Key</label>
